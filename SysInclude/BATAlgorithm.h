@@ -30,8 +30,9 @@ Note: In this software, the default inverter is supposed to be DMC1500 board.
 
 #define Kokam100Ah            0
 #define Kokam60Ah             0
+#define FarasisP56Ah          1
 #define FarasisP52Ah          0
-#define FarasisP40Ah          1
+#define FarasisP40Ah          0
 #define Frey60Ah              0
 
 #define C_SocInitCTVaule      1

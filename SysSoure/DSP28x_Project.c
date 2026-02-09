@@ -490,7 +490,7 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
           }
       }
       // 팩 과전압 Alarm,유지시간카운터배열값:3,유지시간;100msec
-      if(Hyst_On(s->Bat80VVoltageF,102.0f))
+      if(Hyst_On(s->Bat80VVoltageF,90.2f))
       {
           if(s->Bat80VAlarmCont[3]< 100){++s->Bat80VAlarmCont[3];}
           if(s->Bat80VAlarmCont[3]>=100)
@@ -504,14 +504,14 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
           {
               s->Bat80VAlarmCont[3]=0;
           }
-          if(Hyst_Off(s->Bat80VVoltageF,98.9f))
+          if(Hyst_Off(s->Bat80VVoltageF,87.5f))
           {
               s->Bat80VAlarmCont[3]=0;
               s->BAT80VAlarmReg.bit.PackVolt_OV=0;
           }
       }
       // 팩 저전압 Alarm,유지시간카운터배열값:4,유지시간;100msec
-      if(Hyst_Off(s->Bat80VVoltageF,68.4f))
+      if(Hyst_Off(s->Bat80VVoltageF,66.5f))
       {
           if(s->Bat80VAlarmCont[4]< 100){++s->Bat80VAlarmCont[4];}
           if(s->Bat80VAlarmCont[4]>=100)
@@ -525,14 +525,14 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
           {
               s->Bat80VAlarmCont[4]=0;
           }
-          if(Hyst_On(s->Bat80VVoltageF,71.4f))
+          if(Hyst_On(s->Bat80VVoltageF,69.3f))
           {
               s->Bat80VAlarmCont[4]=0;
               s->BAT80VAlarmReg.bit.PackVolt_UN=0;
           }
       }
-      // 팩 저전압 Alarm,유지시간카운터배열값:5,유지시간;100msec
-      if(Hyst_On(s->Bat80VCellAgvTemperatureF,55.0f))
+      // 팩 과온 Alarm,유지시간카운터배열값:5,유지시간;100msec
+      if(Hyst_On(s->Bat80VCellAgvTemperatureF,47.0f))
       {
           if(s->Bat80VAlarmCont[5]< 100){++s->Bat80VAlarmCont[5];}
           if(s->Bat80VAlarmCont[5]>=100)
@@ -546,7 +546,7 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
           {
               s->Bat80VAlarmCont[5]=0;
           }
-          if(Hyst_Off(s->Bat80VCellAgvTemperatureF,52.3f))
+          if(Hyst_Off(s->Bat80VCellAgvTemperatureF,44.7f))
           {
               s->Bat80VAlarmCont[5]=0;
               s->BAT80VAlarmReg.bit.PackTemp_OV=0;
@@ -555,7 +555,7 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
       // 팩 저온 Alarm,유지시간카운터배열값:6,유지시간;100msec
       if(s->BAT80VStateReg.bit.sysDisChaMode==1)
       {
-          if(Hyst_Off(s->Bat80VCellAgvTemperatureF,-15.0f))
+          if(Hyst_Off(s->Bat80VCellAgvTemperatureF,-25.0f))
           {
               if(s->Bat80VAlarmCont[6]< 100){++s->Bat80VAlarmCont[6];}
               if(s->Bat80VAlarmCont[6]>=100)
@@ -580,7 +580,7 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
       {
           if(s->BAT80VStateReg.bit.sysDisChaMode==1)
           {
-              if(Hyst_Off(s->Bat80VCellAgvTemperatureF,-15.0f))
+              if(Hyst_Off(s->Bat80VCellAgvTemperatureF,-25.0f))
               {
                   if(s->Bat80VAlarmCont[6]< 100){++s->Bat80VAlarmCont[6];}
                   if(s->Bat80VAlarmCont[6]>=100)
@@ -654,7 +654,7 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
       }
 
       // 셀 과전압 Alarm,유지시간카운터배열값:8,유지시간:00msec
-      if(Hyst_On(s->Bat80VCellMaxVoltageF,4.25f))
+      if(Hyst_On(s->Bat80VCellMaxVoltageF,4.10f))
       {
           if(s->Bat80VAlarmCont[8]< 100){++s->Bat80VAlarmCont[8];}
           if(s->Bat80VAlarmCont[8]>=100)
@@ -668,14 +668,14 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
           {
               s->Bat80VAlarmCont[8]=0;
           }
-          if(Hyst_Off(s->Bat80VCellMaxVoltageF,4.23f))
+          if(Hyst_Off(s->Bat80VCellMaxVoltageF,4.08f))
           {
               s->Bat80VAlarmCont[8]=0;
               s->BAT80VAlarmReg.bit.CellVolt_OV=0;
           }
       }
       // 셀 저전압 Alarm,유지시간카운터배열값:9,유지시간:100msec
-      if(Hyst_Off(s->Bat80VCellMinVoltageF,2.80f))
+      if(Hyst_Off(s->Bat80VCellMinVoltageF,3.00f))
       {
           if(s->Bat80VAlarmCont[9]< 100){++s->Bat80VAlarmCont[8];}
           if(s->Bat80VAlarmCont[9]>=100)
@@ -689,14 +689,14 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
           {
               s->Bat80VAlarmCont[9]=0;
           }
-          if(Hyst_On(s->Bat80VCellMinVoltageF,2.94f))
+          if(Hyst_On(s->Bat80VCellMinVoltageF,3.015f))
           {
               s->Bat80VAlarmCont[9]=0;
               s->BAT80VAlarmReg.bit.CellVolt_UN=0;
           }
       }
       // 셀 전압 편차 Alarm,유지시간카운터배열값:10,유지시간:100msec
-      if(Hyst_On(s->Bat80VCellDivVoltageF,0.45f))
+      if(Hyst_On(s->Bat80VCellDivVoltageF,0.2f))
       {
           if(s->Bat80VAlarmCont[10]< 100){++s->Bat80VAlarmCont[10];}
           if(s->Bat80VAlarmCont[10]>=100)
@@ -710,7 +710,7 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
           {
               s->Bat80VAlarmCont[10]=0;
           }
-          if(Hyst_Off(s->Bat80VCellDivVoltageF,0.32f))
+          if(Hyst_Off(s->Bat80VCellDivVoltageF,0.20f))
           {
               s->Bat80VAlarmCont[10]=0;
               s->BAT80VAlarmReg.bit.CellVolt_BL=0;
@@ -738,7 +738,7 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
           }
       }
       // 셀 저온 Alarm,유지시간카운터배열값:12,유지시간:100msec
-      if(Hyst_Off(s->Bat80VCellMinVoltageF,-15.0f))
+      if(Hyst_Off(s->Bat80VCellMinVoltageF,-20.0f))
       {
           if(s->Bat80VAlarmCont[12]< 100){++s->Bat80VAlarmCont[12];}
           if(s->Bat80VAlarmCont[12]>=100)
@@ -759,7 +759,7 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
           }
       }
       // 셀 온도 편차 Alarm,유지시간카운터배열값:13,유지시간:100msec
-      if(Hyst_On(s->Bat80VCellDivTemperatureF,8.0f))
+      if(Hyst_On(s->Bat80VCellDivTemperatureF,10.0f))
       {
           if(s->Bat80VAlarmCont[13]< 100){++s->Bat80VAlarmCont[13];}
           if(s->Bat80VAlarmCont[13]>=100)
@@ -773,13 +773,12 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
           {
               s->Bat80VAlarmCont[13]=0;
           }
-          if(Hyst_Off(s->Bat80VCellDivTemperatureF,4.0f))
+          if(Hyst_Off(s->Bat80VCellDivTemperatureF,5.0f))
           {
               s->Bat80VAlarmCont[13]=0;
               s->BAT80VAlarmReg.bit.CellTemp_BL=0;
           }
       }
-
 
 }
 unsigned int    CellVoltUnBalaneFaulCount=0;

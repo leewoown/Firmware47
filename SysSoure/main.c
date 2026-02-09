@@ -52,10 +52,16 @@ void Bat80V_FanControlHandle(PrtectRelayReg *p);
 void Cal80VSysVoltageHandle(SystemReg *s);
 void Cal80VSysTemperatureHandle(SystemReg *s);
 void Cal80VSysCurrentHandle(SystemReg *s);
-void CalFarasis40AhRegsInit(SocReg *P);
-extern void CalFarasis40AhRegsInit(SocReg *P);
-extern void CalFarasis40AhSocInit(SocReg *P);
-extern void CalFarasis40AhSocHandle(SocReg *P);
+/*
+ * SOC 알고지름
+ */
+
+void CalFarasis56AhRegsInit(SocReg *P);
+void CalFarasis56AhSocInit(SocReg *P);
+void CalFarasis56AhSocHandle(SocReg *P);
+/*
+ *
+ */
 void Cal80VSysFaultCheck(SystemReg *s);
 void Cal80VSysAlarmtCheck(SystemReg *s);
 /*
@@ -64,8 +70,9 @@ void Cal80VSysAlarmtCheck(SystemReg *s);
 void Cal12VSysVoltageHandle(SystemReg *s);
 void Cal12VSysTemperatureHandle(SystemReg *s);
 void Cal12VSysCurrentHandle(SystemReg *s);
-//void CalFrey60AhRegsInit(SocReg *P);
-//void CalFrey60AhSocHandle(SocReg *P);
+/*
+ *
+ */
 void Cal12VSysAlarmtCheck(SystemReg *s);
 void Cal12VSysFaultCheck(SystemReg *s);
 
@@ -115,11 +122,12 @@ interrupt void cpu_timer0_isr(void);
 interrupt void ISR_CANRXINTA(void);
 //interrupt void cpu_timer2_isr(void);
 
+
+
 SystemReg       SysRegs;
-float32 randomCT=0;
-float32 randomA=0;
-float32 randomC=0;
+
 PrtectRelayReg  PrtectRelayRegs;
+
 SlaveReg        Slave1Regs;
 SlaveReg        Slave2Regs;
 SlaveReg        Slave3Regs;
@@ -131,8 +139,14 @@ NVRZoneAReg     NVRZoneAInitRegs;
 
 
 CANAReg         CANARegs;
-SocReg          Farasis40AhSocRegs;
+SocReg          Farasis56AhSocRegs;
+
+//SocReg          Farasis40AhSocRegs;
 //SocReg          Frey60AhSocRegs;
+
+float32         randomCT=0;
+float32         randomA=0;
+float32         randomC=0;
 float32         testct=0;
 float32         testctabs=0;
 float32         NCMsocTestVoltAGV =3.210;
@@ -227,7 +241,7 @@ void main(void)
                  SysTimerINIT(&SysRegs);
                  SysVarINIT(&SysRegs);
                  CANRegVarINIT(&CANARegs);
-                 CalFarasis40AhSocInit(&Farasis40AhSocRegs);
+                 CalFarasis56AhRegsInit(&Farasis56AhSocRegs);
                  SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=0;
                  SysRegs.BAT80VDigitalOutPutReg.bit.LEDFaultOUT=0;
                  SysRegs.BAT80VDigitalOutPutReg.bit.LEDProtectOUT=0;
@@ -280,8 +294,55 @@ void main(void)
                  SysRegs.BAT80VStateReg.bit.BalanceMode=0;
                  SysRegs.BalanceModeCount=0;
                  SysRegs.BalanceTimeCount=0;
-                 Farasis40AhSocRegs.state=SOC_STATE_IDLE;
+                 Farasis56AhSocRegs.state=SOC_STATE_IDLE;
                  SysRegs.BAT80VFaulBuftReg.all=0;
+                 /*
+                  * CELL VOLTAGE measurement
+                  */
+                 for(SysRegs.InitValuleCnt=0;SysRegs.InitValuleCnt<5;SysRegs.InitValuleCnt++)
+                 {
+                     Slave1Regs.StateMachine = STATE_BATREAD;
+                     Slave2Regs.StateMachine = STATE_BATREAD;
+                     Slave1Regs.ID=BMS_ID_1;
+
+                     SlaveVoltagHandler(&Slave1Regs);
+                     Slave2Regs.ID=BMS_ID_2;
+                     SlaveVoltagHandler(&Slave2Regs);
+                     /*
+                      * BAT80V CELL VOLTATGE, SOC
+                      * Initialize SOC calculation
+                      */
+                 }
+                 memcpy(&SysRegs.Bat80VCellVoltageF[0],     &Slave1Regs.CellVoltageF[0],sizeof(float32)*12);
+                 memcpy(&SysRegs.Bat80VCellVoltageF[12],    &Slave2Regs.CellVoltageF[0],sizeof(float32)*12);
+                 Cal80VSysVoltageHandle(&SysRegs);
+                 /*
+                  * CELL temperature measurement
+                  */
+                 for(SysRegs.TempInitCount=0;SysRegs.TempInitCount<100;SysRegs.TempInitCount++)
+                 {
+                     Slave1Regs.ID=BMS_ID_1;
+                     Slave1Regs.BATICDO.bit.GPIO1=1;
+                     SlaveBMSDigiteldoutOHandler(&Slave1Regs);
+                     SalveTempsHandler(&Slave1Regs);
+                     delay_ms(1);
+                     Slave2Regs.ID=BMS_ID_2;
+                     Slave2Regs.BATICDO.bit.GPIO1=1;
+                     SlaveBMSDigiteldoutOHandler(&Slave2Regs);
+                     SalveTempsHandler(&Slave2Regs);
+                     delay_ms(1);
+                 }
+                 memcpy(&SysRegs.Bat80VCellTemperatureF[0],     &Slave1Regs.CellTemperatureF[0],sizeof(float32)*11);
+                 memcpy(&SysRegs.Bat80VCellTemperatureF[11],    &Slave2Regs.CellTemperatureF[0],sizeof(float32)*11);
+                 Cal80VSysTemperatureHandle(&SysRegs);
+                 /*
+                  *
+                  */
+                // NVRAM_AZoneReadHandler(&NVRZoneARDRegs);
+                 //Farasis56AhSocRegs.NVRSocInitF = (float32)NVRZoneARDRegs.LastSOC/10.0F;
+                 Farasis56AhSocRegs.CellAgvVoltageF = SysRegs.Bat80VCellAgvVoltageF;
+                 CalFarasis56AhSocInit(&Farasis56AhSocRegs);
+                 SysRegs.Bat80VSOCF=Farasis56AhSocRegs.SysSocInitF;
                  SysRegs.SysMachine=System_STATE_STANDBY;
 
             break;
@@ -290,51 +351,8 @@ void main(void)
                   SysRegs.BAT80VStateReg.bit.CANCOMEnable=0;
                   SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=0;
                   SysRegs.BAT80VDigitalOutPutReg.bit.LEDFaultOUT=0;
-                  for(SysRegs.InitValuleCnt=0;SysRegs.InitValuleCnt<20;SysRegs.InitValuleCnt++)
-                  {
-                      /*
-                       * CELL VOLTAGE measurement
-                       */
-                      Slave1Regs.StateMachine = STATE_BATREAD;
-                      Slave2Regs.StateMachine = STATE_BATREAD;
-                      Slave1Regs.ID=BMS_ID_1;
-                      SlaveVoltagHandler(&Slave1Regs);
-                      Slave2Regs.ID=BMS_ID_2;
-                      SlaveVoltagHandler(&Slave2Regs);
-                      /*
-                       * BAT80V CELL VOLTATGE, SOC
-                       * Initialize SOC calculation
-                       */
-                      memcpy(&SysRegs.Bat80VCellVoltageF[0],     &Slave1Regs.CellVoltageF[0],sizeof(float32)*12);
-                      memcpy(&SysRegs.Bat80VCellVoltageF[12],    &Slave2Regs.CellVoltageF[0],sizeof(float32)*12);
-                      Cal80VSysVoltageHandle(&SysRegs);
-                      /*
-                       * CELL temperature measurement
-                       */
-                      for(SysRegs.TempInitCount=0;SysRegs.TempInitCount<24;SysRegs.TempInitCount++)
-                      {
-                          Slave1Regs.ID=BMS_ID_1;
-                          Slave1Regs.BATICDO.bit.GPIO1=1;
-                          SlaveBMSDigiteldoutOHandler(&Slave1Regs);
-                          SalveTempsHandler(&Slave1Regs);
-                          delay_ms(1);
-                          Slave2Regs.ID=BMS_ID_2;
-                          Slave2Regs.BATICDO.bit.GPIO1=1;
-                          SlaveBMSDigiteldoutOHandler(&Slave2Regs);
-                          SalveTempsHandler(&Slave2Regs);
-                          delay_ms(1);
-                      }
-                      memcpy(&SysRegs.Bat80VCellTemperatureF[0],     &Slave1Regs.CellTemperatureF[0],sizeof(float32)*12);
-                      memcpy(&SysRegs.Bat80VCellTemperatureF[12],    &Slave2Regs.CellTemperatureF[0],sizeof(float32)*12);
-                      NVRAM_AZoneReadHandler(&NVRZoneARDRegs);
-                      Farasis40AhSocRegs.NVRSocInitF = (float32)NVRZoneARDRegs.LastSOC/10.0F;
-                      Farasis40AhSocRegs.CellAgvVoltageF = SysRegs.Bat80VCellAgvVoltageF;
-                      CalFarasis40AhSocInit(&Farasis40AhSocRegs);
-                      SysRegs.Bat80VSOCF=Farasis40AhSocRegs.SysSocInitF;
-                      //NVRAM_RecognizeAndInit(&NVRZoneAInitRegs);
-                     // NVRZoneAWRRegs.SysTimeTick = NVRZoneAInitRegs.SysTimeTick;
-                     // NVRZoneAWRRegs.LastSOC    =  NVRZoneAInitRegs.LastSOC;
-                  }
+
+
                   /*
                    * SChange the state machine to System_STATE_READY
                    */
@@ -349,7 +367,7 @@ void main(void)
                   SysRegs.BAT80VStateReg.bit.INITOK=1;
                   NVRAllRegs.SEQ=NVRAM_AZoneSave;
                   SysRegs.SysMachine=System_STATE_READY;
-                  Farasis40AhSocRegs.state= SOC_STATE_RUNNING;
+                  Farasis56AhSocRegs.state= SOC_STATE_RUNNING;
             break;
             case System_STATE_READY:
                  SysRegs.BAT80VStateReg.bit.CANCOMEnable=1;
@@ -574,7 +592,7 @@ void main(void)
                       NVRZoneAWRRegs.MetaVersion=Product_Version;
                       NVRZoneAWRRegs.LastState = NVRZoneAWRRegs.SysTimeTick++;
                       NVRZoneAWRRegs.LastSOC   = (int16)SysRegs.Bat80VSOCF*10;
-                      NVRAM_AZoneSaveHandler(&NVRZoneAWRRegs);
+                    //  NVRAM_AZoneSaveHandler(&NVRZoneAWRRegs);
                       NVRAllRegs.SEQ=NVRAM_AZoneRead;
                       NVRAllRegs.DebugCount++;
                 break;
@@ -604,7 +622,7 @@ void main(void)
                      NVRZoneAWRRegs.SysTimeTick=0;
                      NVRZoneAWRRegs.LastLogTimestamp=0;
                      NVRZoneAWRRegs.LastEventTimestamp=0;
-                     NVRAM_AZoneSaveHandler(&NVRZoneAWRRegs);
+                   //  NVRAM_AZoneSaveHandler(&NVRZoneAWRRegs);
                      SysRegs.SysMachine=System_STATE_INIT;
                      NVRAllRegs.SEQ=NVRAM_AZoneRead;
                 break;
@@ -613,11 +631,11 @@ void main(void)
                 break;
                 case NVRAM_NVRSocInit :
                     NVRZoneAWRRegs.LastSOC          = CANARegs.NVRSocInit;
-                    Farasis40AhSocRegs.SysSocInitF  = CANARegs.NVRSocInit;
-                    Farasis40AhSocRegs.CTCount=0;
-                    NVRAM_AZoneSaveHandler(&NVRZoneAWRRegs);
-                    SysRegs.SysMachine=System_STATE_READY;
-                    NVRAllRegs.SEQ=NVRAM_AZoneRead;
+                    Farasis56AhSocRegs.SysSocInitF  = CANARegs.NVRSocInit;
+                    Farasis56AhSocRegs.CTCount=0;
+                  //  NVRAM_AZoneSaveHandler(&NVRZoneAWRRegs);
+                  //  SysRegs.SysMachine=System_STATE_READY;
+                  //  NVRAllRegs.SEQ=NVRAM_AZoneRead;
                 break;
                 case NVRAM_MANUALMode :
 
@@ -677,18 +695,18 @@ interrupt void cpu_timer0_isr(void)
    //Farasis40AhSocRegs
    //SysRegs.Bat80VCurrentF=testct;
    //SysRegs.Bat80VCurrentAsbF=testctabs;
-   Farasis40AhSocRegs.CellAgvVoltageF = SysRegs.Bat80VCellAgvVoltageF;
-   Farasis40AhSocRegs.SysSoCCTF       = SysRegs.Bat80VCurrentF;
-   Farasis40AhSocRegs.SysSoCCTAbsF    = SysRegs.Bat80VCurrentAsbF;
-   Farasis40AhSocRegs.NVRSocInitF     = (float32)NVRZoneARDRegs.LastSOC/10.0F;
-   CalFarasis40AhSocHandle(&Farasis40AhSocRegs);
-   if(Farasis40AhSocRegs.SoCStateRegs.bit.CalMeth==0)
+   Farasis56AhSocRegs.CellAgvVoltageF = SysRegs.Bat80VCellAgvVoltageF;
+   Farasis56AhSocRegs.SysSoCCTF       = SysRegs.Bat80VCurrentF;
+   Farasis56AhSocRegs.SysSoCCTAbsF    = SysRegs.Bat80VCurrentAsbF;
+   //Farasis40AhSocRegs.NVRSocInitF     = (float32)NVRZoneARDRegs.LastSOC/10.0F;
+   CalFarasis56AhSocHandle(&Farasis56AhSocRegs);
+   if(Farasis56AhSocRegs.SoCStateRegs.bit.CalMeth==0)
    {
-       SysRegs.Bat80VSOCF=Farasis40AhSocRegs.SysSocInitF;
+       SysRegs.Bat80VSOCF=Farasis56AhSocRegs.SysSocInitF;
    }
-   else if(Farasis40AhSocRegs.SoCStateRegs.bit.CalMeth==1)
+   else if(Farasis56AhSocRegs.SoCStateRegs.bit.CalMeth==1)
    {
-       SysRegs.Bat80VSOCF=Farasis40AhSocRegs.SysSOCF;
+       SysRegs.Bat80VSOCF=Farasis56AhSocRegs.SysSOCF;
    }
    /*
     * 80V Battery Alarm & Fault Check
@@ -704,7 +722,7 @@ interrupt void cpu_timer0_isr(void)
        {
            SysRegs.BAT80VStateReg.bit.SysAalarm=0;
        }
-       Cal80VSysFaultCheck(&SysRegs);
+      // Cal80VSysFaultCheck(&SysRegs);
        if(SysRegs.BAT80VFaultReg.all != 0)
        {
           // CANARegs.BAT80VFaultCT = (int)(SysRegs.Bat80VFaultCurrentF*10);
@@ -721,7 +739,16 @@ interrupt void cpu_timer0_isr(void)
        SysRegs.BAT80VStateReg.bit.SysAalarm=0;
        SysRegs.BAT80VStateReg.bit.SysFault=0;
    }
-
+   if(CANARegs.PMSCMDRegs.bit.PrtctReset==1)
+   {
+       CANARegs.PMSCMDRegs.bit.PrtctReset=0;
+       SysRegs.BAT80VFaultReg.all=0;
+       SysRegs.BAT80VFaulBuftReg.all=0;
+       SysRegs.BAT80VFaultReg.all=0;
+       SysRegs.BAT80VStateReg.bit.SysFault=0;
+       delay_ms(50);
+       SysRegs.SysMachine=System_STATE_READY;
+   }
 
    switch(SysRegs.SysRegTimer5msecCount)
    {
@@ -755,7 +782,7 @@ interrupt void cpu_timer0_isr(void)
                }
        break;
        case 5:
-               if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
+             /*  if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                {
 
                    if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
@@ -775,7 +802,23 @@ interrupt void cpu_timer0_isr(void)
                    CANARegs.BAT80VAh                             = (int)(Farasis40AhSocRegs.SysAhF*10);
                    CANATX(0x602,8,CANARegs.BAT80VStatus.all,CANARegs.BAT80VDigitalOutPutReg.all,CANARegs.BAT80VAh,SysRegs.BAT80VStateReg.all);
                }
-
+               */
+               if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
+               {
+                  SysRegs.BAT80VStateReg.bit.SysSTATE=3;
+               }
+               if(SysRegs.BAT80VStateReg.bit.SysFault==1)
+               {
+                  SysRegs.BAT80VStateReg.bit.SysSTATE=4;
+               }
+               CANARegs.BAT80VStatus.bit.BATStatus           = SysRegs.BAT80VStateReg.bit.SysSTATE;
+               CANARegs.BAT80VDigitalOutPutReg.bit.NRlyOUT   = PrtectRelayRegs.State.bit.NRelayDO;
+               CANARegs.BAT80VDigitalOutPutReg.bit.CHARlyOUT = PrtectRelayRegs.State.bit.PreRelayDO;
+               CANARegs.BAT80VDigitalOutPutReg.bit.PRlyOUT   = PrtectRelayRegs.State.bit.PRelayDO;
+               CANARegs.BAT80VStatus.bit.BalanceEN           = SysRegs.BAT80VStateReg.bit.BalanceMode;
+               SysRegs.BAT80VStateReg.bit.SocMode            = Farasis56AhSocRegs.SoCStateRegs.bit.CalMeth;
+               CANARegs.BAT80VAh                             = (int)(Farasis56AhSocRegs.SysAhF*10);
+               CANATX(0x602,8,CANARegs.BAT80VStatus.all,CANARegs.BAT80VDigitalOutPutReg.all,CANARegs.BAT80VAh,SysRegs.BAT80VStateReg.all);
        default :
        break;
    }
@@ -824,7 +867,7 @@ interrupt void cpu_timer0_isr(void)
                 if(SysRegs.SysCanRxCount>=10)
                 {
                     CANARegs.PMSCMDRegs.bit.RUNStatus=0;
-                    SysRegs.BAT80VFaultReg.bit.PackCAN_ERR=1;
+                    SysRegs.BAT80VAlarmReg.bit.PackCAN_ERR=1;
                     SysRegs.SysCanRxCount=11000;
                  }
        break;
@@ -977,6 +1020,7 @@ interrupt void cpu_timer0_isr(void)
        case 100:
                 memcpy(&SysRegs.Bat80VCellTemperatureF[0],     &Slave1Regs.CellTemperatureF[0],sizeof(float32)*11);
                 memcpy(&SysRegs.Bat80VCellTemperatureF[11],    &Slave2Regs.CellTemperatureF[0],sizeof(float32)*11);
+
        break;
 
        case 120:

@@ -37,7 +37,7 @@ void Bat80V_FanControlHandle(PrtectRelayReg *p)
         case FAN_STATE_OFF:
         {
             /* OFF → ON 조건 */
-            if (Hyst_On(MaxTempF, 15.0))
+            if (Hyst_On(MaxTempF, 30.0))
             {
                 p->FanMachine = FAN_STATE_ON;
                 LatchSetRlyON;
@@ -48,7 +48,7 @@ void Bat80V_FanControlHandle(PrtectRelayReg *p)
         case FAN_STATE_ON:
         {
             /* ON → OFF 조건 */
-            if (Hyst_Off(MaxTempF, 12.0))
+            if (Hyst_Off(MaxTempF, 28.0))
             {
                 p->FanMachine = FAN_STATE_OFF;
                 LatchSetRlyOFF;

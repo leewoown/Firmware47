@@ -4,30 +4,11 @@
 #include "math.h"
 #include "string.h"
 
-#if FarasisP52Ah
-extern void CalFarasis52AhRegsInit(SocReg *P);
-extern void CalFarasis52AhSocInit(SocReg *P);
-extern void CalFarasis52AhSocHandle(SocReg *P);
-#define C_Farasis52Ah_SOCX2     -138.71
-#define C_Farasis52Ah_SOCX1     1195.70
-#define C_Farasis52Ah_SOCX0    -2472.30
-#define C_FarasisP52AhNorm      0.0238//1/42Ah
-#endif
-#if Frey60Ah
-extern void CalFrey60AhRegsInit(SocReg *P);
-extern void CalFrey60AhSocInit(SocReg *P);
-extern void CalFrey60AhSocHandle(SocReg *P);
 
-#define C_Frey60Ah_SOCX1A    62.112
-#define C_Frey60Ah_SOCX0A   -189.44
-#define C_Frey60Ah_SOCX2B    2566.7
-#define C_Frey60Ah_SOCX1B    -16384
-#define C_Frey60Ah_SOCX0B     26156
-#define C_Frey60Ah_SOCX1C    1313.1
-#define C_Frey60Ah_SOCX0C   -4276.6
-#define C_Frey60Ah_SOCX1D    939.26
-#define C_Frey60Ah_SOCX0D   -3043.6
-#define C_Frey60AhNorm      0.0208//1/48Ah
+
+
+#if Frey60Ah
+
 #endif
 extern unsigned int LFPINITFLAG;
 
@@ -207,15 +188,215 @@ void CalFarasis40AhSocHandle(SocReg *P)
         P->SysTime=0;
     }
 }
-
-
-
-
-
-
-
 #endif
+#if FarasisP56Ah
+extern void CalFarasis56AhRegsInit (SocReg *P);
+extern void CalFarasis56AhSocInit  (SocReg *P);
+extern void CalFarasis56AhSocHandle(SocReg *P);
+#define     C_Farasis56Ah_SOCX2     -138.71
+#define     C_Farasis56Ah_SOCX1     1195.70
+#define     C_Farasis56Ah_SOCX0    -2472.30
+#define     C_FarasisP56AhNorm      0.0222//1/45Ah
+void CalFarasis56AhRegsInit(SocReg *P)
+{
+    P->SysSOCdtF=0.0;
+    P->SysSoCCTF=0.0;
+    P->SysAhNewF=0.0;
+    P->SysAhOldF=0.0;
+    P->SysAhF=0.0;
+    P->SysSOCBufF1=0.0;
+    P->SysSOCBufF2=0.0;
+    P->SysSOCF=5.0;
+    P->AVGXF=0.0;
+    P->SOCX4InF=0.0;
+    P->SOCX3InF=0.0;
+    P->SOCX2InF=0.0;
+    P->SOCX1InF=0.0;
+    P->SOCX4OutF=0.0;
+    P->SOCX3OutF=0.0;
+    P->SOCX2OutF=0.0;
+    P->SOCX1OutF=0.0;
+    P->SOCbufF=0.0;
+    P->SysSocInitF=0.0;
+    P->CellAgvVoltageF=0.0;
+    P->SoCStateRegs.all=0;
+    P->CTCount=0;
+    P->SysTime=0;
+    P->SysSoCCTAbsF=0;
+    P->state=SOC_STATE_IDLE;
+}
+void CalFarasis56AhSocInit(SocReg *P)
+{
+
+    // 60Ah
+     P->AVGXF         =   P->CellAgvVoltageF;
+     P->SOCX2InF      =   P->AVGXF  * P->AVGXF;
+     P->SOCX1InF      =   P->AVGXF;
+     P->SOCX2OutF     =   C_Farasis56Ah_SOCX2 * P->SOCX2InF;
+     P->SOCX1OutF     =   C_Farasis56Ah_SOCX1 * P->SOCX1InF;
+     P->SOCbufF       =   P->SOCX2OutF + P->SOCX1OutF + C_Farasis56Ah_SOCX0;
+     /*
+      *  보관법 계산식 필요함
+      */
+     if((P->SOCbufF >= 0.0)&&(P->SOCbufF < 20.0))
+     {
+         P->SOCbufF  =   P->SOCbufF-2;
+     }
+     if((P->SOCbufF >= 20)&&(P->SOCbufF < 40.0))
+     {
+         P->SOCbufF  =   P->SOCbufF+3;
+     }
+     if((P->SOCbufF >= 40)&&(P->SOCbufF < 80.0))
+     {
+         P->SOCbufF  =   P->SOCbufF+3.0;
+     }
+     if(P->SOCbufF >= 80.0)
+     {
+         P->SOCbufF  =   P->SOCbufF-3;
+     }
+     /*
+      *
+      */
+     if(P->SOCbufF <=0.0)
+     {
+         P->SOCbufF = 0.0;
+     }
+     else if(P->SOCbufF > 98.0)
+     {
+         P->SOCbufF = 100.0;
+     }
+     P->SysSocInitF = P->SOCbufF;
+}
+
+void CalFarasis56AhSocHandle(SocReg *P)
+{
+    P->SysTime++;
+    if(P->SysTime>=C_SocSamPleCount)
+    {
+        if(P->SysSoCCTAbsF>=C_SocInitCTVaule)
+        {
+            P->SoCStateRegs.bit.CalMeth=1;
+            P->CTCount=0;
+        }
+        else
+        {
+            P->CTCount++;
+            if(P->CTCount>6000)
+            {
+                P->CTCount=6001;
+                P->SoCStateRegs.bit.CalMeth=0;
+            }
+        }
+        switch (P->state)
+        {
+
+            case SOC_STATE_RUNNING:
+                 if(P->SoCStateRegs.bit.CalMeth==0)
+                 {
+                     /*
+                      *
+                      */
+                     //52Ah
+
+                     P->AVGXF         =   P->CellAgvVoltageF;
+                     P->SOCX2InF      =   P->AVGXF  * P->AVGXF;
+                     P->SOCX1InF      =   P->AVGXF;
+                     P->SOCX2OutF     =   C_Farasis56Ah_SOCX2 * P->SOCX2InF;
+                     P->SOCX1OutF     =   C_Farasis56Ah_SOCX1 * P->SOCX1InF;
+                     P->SOCbufF       =   P->SOCX2OutF + P->SOCX1OutF + C_Farasis56Ah_SOCX0;
+                     P->SOCbufF       =   P->SOCbufF+3.0;
+                     /*
+                      *  보관법 계산식 필요함
+                      */
+                     if((P->SOCbufF >= 0.0)&&(P->SOCbufF < 20.0))
+                     {
+                         P->SOCbufF  =   P->SOCbufF-2;
+                     }
+                     if((P->SOCbufF >= 20)&&(P->SOCbufF < 40.0))
+                     {
+                         P->SOCbufF  =   P->SOCbufF+3;
+                     }
+                     if((P->SOCbufF >= 40)&&(P->SOCbufF < 80.0))
+                     {
+                         P->SOCbufF  =   P->SOCbufF+3.0;
+                     }
+                     if(P->SOCbufF >= 80.0)
+                     {
+                         P->SOCbufF  =   P->SOCbufF-3;
+                     }
+                     /*
+                      *
+                      */
+                     if(P->SOCbufF <=0.0)
+                     {
+                         P->SOCbufF = 0.0;
+                     }
+                     else if(P->SOCbufF > 98.0)
+                     {
+                         P->SOCbufF = 100.0;
+                     }
+                      if(P->SOCbufF <=0.0)
+                      {
+                          P->SOCbufF = 0.0;
+                      }
+                      else if(P->SOCbufF > 98.0)
+                      {
+                          P->SOCbufF = 100.0;
+                      }
+                      P->SysSocInitF = P->SOCbufF;
+                 }
+                 if(P->SoCStateRegs.bit.CalMeth==1)
+                 {
+                     /*
+                      *
+                      */
+                     P->SysSOCdtF = C_CTSampleTime*C_SocCumulativeTime; // CumulativeTime(1/3600) -> 누적시간
+                     P->SysAhNewF = P->SysSoCCTF * P->SysSOCdtF;
+                     P->SysAhF    = P->SysAhNewF + P->SysAhOldF;
+                     P->SysAhOldF = P->SysAhF;
+                     if(P->SysAhF <= -56.0)
+                     {
+                        P->SysAhF =-56.0;
+                     }
+                     if(P->SysAhF> 56.0)
+                     {
+                         P->SysAhF= 56.0;
+                     }
+                     /*
+                     * SOC 변환
+                     */
+                     P->SysSOCBufF1 = P->SysAhF *C_FarasisP56AhNorm;//0.0125 ;// 1/80 --> 0.0125--> 일반화
+                     P->SysSOCBufF2 = P->SysSOCBufF1*100.0; //--> 단위 변환 %
+                     P->SysSOCF     = P->SysSocInitF+P->SysSOCBufF2;
+                 }
+                 P->state = SOC_STATE_Save;
+
+            break;
+            case SOC_STATE_Save:
+
+                P->state = SOC_STATE_RUNNING;
+
+            break;
+            case SOC_STATE_CLEAR:
+
+            break;
+        }
+        P->SysTime=0;
+    }
+}
+#endif
+
+
+
+
 #if FarasisP52Ah
+extern void CalFarasis52AhRegsInit(SocReg *P);
+extern void CalFarasis52AhSocInit(SocReg *P);
+extern void CalFarasis52AhSocHandle(SocReg *P);
+#define C_Farasis52Ah_SOCX2     -138.71
+#define C_Farasis52Ah_SOCX1     1195.70
+#define C_Farasis52Ah_SOCX0    -2472.30
+#define C_FarasisP52AhNorm      0.0238//1/42Ah
 void CalFarasis52AhRegsInit(SocReg *P)
 {
     P->SysSOCdtF=0.0;
@@ -408,6 +589,20 @@ void CalFarasis52AhSocHandle(SocReg *P)
 #endif
 
 #if Frey60Ah
+extern void CalFrey60AhRegsInit(SocReg *P);
+extern void CalFrey60AhSocInit(SocReg *P);
+extern void CalFrey60AhSocHandle(SocReg *P);
+
+#define C_Frey60Ah_SOCX1A    62.112
+#define C_Frey60Ah_SOCX0A   -189.44
+#define C_Frey60Ah_SOCX2B    2566.7
+#define C_Frey60Ah_SOCX1B    -16384
+#define C_Frey60Ah_SOCX0B     26156
+#define C_Frey60Ah_SOCX1C    1313.1
+#define C_Frey60Ah_SOCX0C   -4276.6
+#define C_Frey60Ah_SOCX1D    939.26
+#define C_Frey60Ah_SOCX0D   -3043.6
+#define C_Frey60AhNorm      0.0208//1/48Ah
 void CalFrey60AhRegsInit(SocReg *P)
 {
     P->SysSOCdtF=0.0;
