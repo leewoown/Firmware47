@@ -56,9 +56,9 @@ void Cal80VSysCurrentHandle(SystemReg *s);
  * SOC 알고지름
  */
 
-void CalFarasis56AhRegsInit(SocReg *P);
-void CalFarasis56AhSocInit(SocReg *P);
-void CalFarasis56AhSocHandle(SocReg *P);
+void CalSocRegsInit(SocReg *P);
+void CellP56AhSocInit(SocReg *P);
+void CalSocHandle(SocReg *P);
 /*
  *
  */
@@ -237,11 +237,11 @@ void main(void)
         switch(SysRegs.SysMachine)
         {
             case System_STATE_INIT:
-
+                SysRegs.BAT80VStateReg.bit.SysSTATE = 0;
                  SysTimerINIT(&SysRegs);
                  SysVarINIT(&SysRegs);
                  CANRegVarINIT(&CANARegs);
-                 CalFarasis56AhRegsInit(&Farasis56AhSocRegs);
+                 CalSocRegsInit(&Farasis56AhSocRegs);
                  SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=0;
                  SysRegs.BAT80VDigitalOutPutReg.bit.LEDFaultOUT=0;
                  SysRegs.BAT80VDigitalOutPutReg.bit.LEDProtectOUT=0;
@@ -319,39 +319,99 @@ void main(void)
                  /*
                   * CELL temperature measurement
                   */
-                 for(SysRegs.TempInitCount=0;SysRegs.TempInitCount<100;SysRegs.TempInitCount++)
+                 for(SysRegs.TempInitCount=0;SysRegs.TempInitCount<50;SysRegs.TempInitCount++)
                  {
                      Slave1Regs.ID=BMS_ID_1;
                      Slave1Regs.BATICDO.bit.GPIO1=1;
                      SlaveBMSDigiteldoutOHandler(&Slave1Regs);
                      SalveTempsHandler(&Slave1Regs);
-                     delay_ms(1);
+                    // delay_ms(1);
                      Slave2Regs.ID=BMS_ID_2;
                      Slave2Regs.BATICDO.bit.GPIO1=1;
                      SlaveBMSDigiteldoutOHandler(&Slave2Regs);
                      SalveTempsHandler(&Slave2Regs);
-                     delay_ms(1);
+                   //  delay_ms(1);
                  }
                  memcpy(&SysRegs.Bat80VCellTemperatureF[0],     &Slave1Regs.CellTemperatureF[0],sizeof(float32)*11);
                  memcpy(&SysRegs.Bat80VCellTemperatureF[11],    &Slave2Regs.CellTemperatureF[0],sizeof(float32)*11);
                  Cal80VSysTemperatureHandle(&SysRegs);
+
                  /*
                   *
                   */
                 // NVRAM_AZoneReadHandler(&NVRZoneARDRegs);
                  //Farasis56AhSocRegs.NVRSocInitF = (float32)NVRZoneARDRegs.LastSOC/10.0F;
+
+                 /*----------------------------------------
+                  * 1. 평균 셀 전압 입력
+                  *----------------------------------------*/
                  Farasis56AhSocRegs.CellAgvVoltageF = SysRegs.Bat80VCellAgvVoltageF;
-                 CalFarasis56AhSocInit(&Farasis56AhSocRegs);
-                 SysRegs.Bat80VSOCF=Farasis56AhSocRegs.SysSocInitF;
+                 /*----------------------------------------
+                  * 2. NVR SOC 입력
+                  *----------------------------------------*/
+                 NVRAM_AZoneReadHandler(&NVRZoneARDRegs);
+                 Farasis56AhSocRegs.NVRSocInitF = (float32)NVRZoneARDRegs.LastSOC / 10.0F;
+
+                 /* NVR 값 보호 */
+                 if(Farasis56AhSocRegs.NVRSocInitF > 100.0F)
+                 {
+                     Farasis56AhSocRegs.NVRSocInitF = 100.0F;
+                 }
+                 else if(Farasis56AhSocRegs.NVRSocInitF < 0.0F)
+                 {
+                     Farasis56AhSocRegs.NVRSocInitF = 0.0F;
+                 }
+                 /*----------------------------------------
+                  * 3. SOC 초기화 (OCV + NVR 판단)
+                  *----------------------------------------*/
+
+                 CellP56AhSocInit(&Farasis56AhSocRegs);
+
+                 /*----------------------------------------
+                  * 4. 시스템 SOC 반영
+                  *----------------------------------------*/
+                 Farasis56AhSocRegs.delta = fabs(Farasis56AhSocRegs.SOCbufF - Farasis56AhSocRegs.NVRSocInitF);
+                 /* OCV 값은 SOCbufF 사용 (이미 계산된 값) */
+                 if((Farasis56AhSocRegs.SOCbufF >= C_SocOCVLinearMinF) && (Farasis56AhSocRegs.SOCbufF <= C_SocOCVLinearMaxF))
+                 {
+                     /* 선형 구간 */
+                     if(Farasis56AhSocRegs.delta > 20.0F)
+                     {
+                         /* NVR 이상 → OCV 사용 */
+                         Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.SOCbufF;
+                     }
+                     else
+                     {
+                         /* NVR 정상 → NVR 사용 */
+                         Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
+                     }
+                 }
+                 else
+                 {
+                     /* 평탄 구간 → NVR 사용 */
+                     Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
+                 }
+
+                 /*----------------------------------------
+                  * 초기 상태 정렬 (중요)
+                  *----------------------------------------*/
+                 Farasis56AhSocRegs.SysAhF    = 0.0F;
+                 Farasis56AhSocRegs.SysAhOldF = 0.0F;
+                 Farasis56AhSocRegs.SysAhNewF = 0.0F;
+                 /* 최종 SOC */
+                 Farasis56AhSocRegs.SysSOCF = Farasis56AhSocRegs.SysSocInitF;
+                 /*----------------------------------------
+                  * 5. 상태 전이
+                  *----------------------------------------*/
                  SysRegs.SysMachine=System_STATE_STANDBY;
 
             break;
             case System_STATE_STANDBY:
-                  SysRegs.BAT80VStateReg.bit.SysSTATE = 0;
+                  SysRegs.BAT80VStateReg.bit.SysSTATE = 1;
                   SysRegs.BAT80VStateReg.bit.CANCOMEnable=0;
                   SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=0;
                   SysRegs.BAT80VDigitalOutPutReg.bit.LEDFaultOUT=0;
-
+                  SysRegs.BAT80VStateReg.bit.SysSTATE = 1;
 
                   /*
                    * SChange the state machine to System_STATE_READY
@@ -590,9 +650,10 @@ void main(void)
             {
                 case NVRAM_AZoneSave :
                       NVRZoneAWRRegs.MetaVersion=Product_Version;
-                      NVRZoneAWRRegs.LastState = NVRZoneAWRRegs.SysTimeTick++;
+                      NVRZoneAWRRegs.SysTimeTick++;
+                      NVRZoneAWRRegs.LastState = SysRegs.BAT80VStateReg.all;
                       NVRZoneAWRRegs.LastSOC   = (int16)SysRegs.Bat80VSOCF*10;
-                    //  NVRAM_AZoneSaveHandler(&NVRZoneAWRRegs);
+                      NVRAM_AZoneSaveHandler(&NVRZoneAWRRegs);
                       NVRAllRegs.SEQ=NVRAM_AZoneRead;
                       NVRAllRegs.DebugCount++;
                 break;
@@ -681,33 +742,17 @@ interrupt void cpu_timer0_isr(void)
    DigitalInput(&SysRegs);
   /*
    * current sensing detection
-  */
-  // DigitalInput(&SysRegs);
+   */
    if(SysRegs.BAT80VStateReg.bit.INITOK==1)
    {
        Cal80VSysCurrentHandle(&SysRegs);
+       Farasis56AhSocRegs.CellAgvVoltageF = SysRegs.Bat80VCellAgvVoltageF;
+       Farasis56AhSocRegs.SysSoCCTF       = SysRegs.Bat80VCurrentF;
+       Farasis56AhSocRegs.SysSoCCTAbsF    = SysRegs.Bat80VCurrentAsbF;
+       CalSocHandle(&Farasis56AhSocRegs);
+       SysRegs.Bat80VSOCF = Farasis56AhSocRegs.SysSOCF;
    }
-   /*
-    *  Farasis40AhSocRegs.CellAgvVoltageF = NCMsocTestVoltAGV;
-    *  Farasis40AhSocRegs.SysSoCCTF       = NUMsocTestVCT;
-    *  Farasis40AhSocRegs.SysSoCCTAbsF    = NUMsocTestVCT;
-    */
-   //Farasis40AhSocRegs
-   //SysRegs.Bat80VCurrentF=testct;
-   //SysRegs.Bat80VCurrentAsbF=testctabs;
-   Farasis56AhSocRegs.CellAgvVoltageF = SysRegs.Bat80VCellAgvVoltageF;
-   Farasis56AhSocRegs.SysSoCCTF       = SysRegs.Bat80VCurrentF;
-   Farasis56AhSocRegs.SysSoCCTAbsF    = SysRegs.Bat80VCurrentAsbF;
-   //Farasis40AhSocRegs.NVRSocInitF     = (float32)NVRZoneARDRegs.LastSOC/10.0F;
-   CalFarasis56AhSocHandle(&Farasis56AhSocRegs);
-   if(Farasis56AhSocRegs.SoCStateRegs.bit.CalMeth==0)
-   {
-       SysRegs.Bat80VSOCF=Farasis56AhSocRegs.SysSocInitF;
-   }
-   else if(Farasis56AhSocRegs.SoCStateRegs.bit.CalMeth==1)
-   {
-       SysRegs.Bat80VSOCF=Farasis56AhSocRegs.SysSOCF;
-   }
+
    /*
     * 80V Battery Alarm & Fault Check
     */
@@ -1075,7 +1120,7 @@ interrupt void cpu_timer0_isr(void)
 }
 interrupt void ISR_CANRXINTA(void)
 {
-    struct ECAN_REGS ECanaShadow;
+   // struct ECAN_REGS ECanaShadow;
     if(ECanaRegs.CANGIF0.bit.GMIF0 == 1)
     {
         CANARegs.MailBoxRxCount++;
