@@ -1,0 +1,32 @@
+# TODO(검증): CCS(Code Composer Studio)/Eclipse + VSCode 산출물·캐시 무시 규칙.
+#   git status가 깔끔하고, 추적이 필요한 파일(targetConfigs/*.ccxml, .vscode/*.json,
+#   소스/헤더, .ccsproject/.cproject/.project)이 누락되지 않음을 확인한 뒤 이 TODO 제거.
+#   주의: .gitignore는 "앞으로의" 추적만 막습니다. 이미 추적 중인
+#   .metadata / .jxbrowser.userdata / Debug / .launches 는
+#   'git rm -r --cached <경로>' 로 별도 추적 해제해야 합니다(요청 시 진행).
+
+# --- CCS / Eclipse 워크스페이스 메타데이터 ---
+.metadata/
+.launches/
+
+# --- 빌드 산출물 (재생성 가능) ---
+Debug/
+Release/
+
+# --- CCS 내장 브라우저(jxbrowser) 캐시 ---
+.jxbrowser.userdata/
+
+# --- CCS 임시 / 원격 작업 / DVT 분석 폴더 ---
+.tempFiles/
+RemoteSystemsTempFiles/
+dvt/
+
+# --- VSCode IntelliSense 캐시 DB (설정 .json 은 추적 유지) ---
+.vscode/*.db
+.vscode/*.db-*
+.vscode/ipch/
+
+# --- OS 부산물 ---
+Thumbs.db
+desktop.ini
+.DS_Store

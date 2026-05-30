@@ -1,0 +1,112 @@
+{
+    "files.associations": {
+        "*.c": "c",
+        "*.h": "c",
+        "*.asm": "asm",
+        "*.cmd": "plaintext",
+        "*.lib": "plaintext",
+        "*.gel": "javascript",
+        "*.ccxml": "xml",
+        "*.ccsproject": "xml",
+        "*.cproject": "xml",
+        "*.project": "xml"
+    },
+    "files.exclude": {
+        "**/.metadata": true,
+        "**/.jxbrowser.userdata": true,
+        "**/.tempFiles": true,
+        "**/RemoteSystemsTempFiles": true,
+        "**/.launches": true,
+        "**/.settings": true
+    },
+    "files.encoding": "utf8",
+    "files.autoGuessEncoding": false,
+    "editor.tabSize": 4,
+    "editor.insertSpaces": false,
+    "editor.detectIndentation": true,
+    "editor.renderWhitespace": "boundary",
+    "editor.wordWrap": "off",
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": true,
+
+    "C_Cpp.errorSquiggles": "enabled",
+    "C_Cpp.default.cStandard": "c99",
+    "C_Cpp.autoAddFileAssociations": true,
+    "C_Cpp.intelliSenseEngine": "default",
+
+    // 자동완성(IntelliSense 제안 팝업) 보장 설정
+    "C_Cpp.autocomplete": "default",
+    "C_Cpp.autocompleteAddParentheses": true,
+    "C_Cpp.suggestSnippets": true,
+    "C_Cpp.intelliSenseEngineFallback": "enabled",
+    "editor.quickSuggestions": {
+        "other": "on",
+        "comments": "off",
+        "strings": "off"
+    },
+    "editor.suggestOnTriggerCharacters": true,
+    "editor.acceptSuggestionOnEnter": "on",
+    "editor.tabCompletion": "on",
+    "[c]": {
+        "editor.quickSuggestions": {
+            "other": "on",
+            "comments": "off",
+            "strings": "off"
+        },
+        "editor.suggest.insertMode": "replace"
+    },
+
+    "search.exclude": {
+        "**/Debug": true,
+        "**/.metadata": true,
+        "**/dvt": true,
+        "**/RemoteSystemsTempFiles": true
+    },
+
+    "terminal.integrated.defaultProfile.windows": "Command Prompt",
+
+    // === Todo Tree (TODO 주석 트리/하이라이트) ===
+    // 코드의 TODO·FIXME·검증 주석을 왼쪽 나무(🌳) 아이콘에서 모아 보고, 코드에도 색으로 강조.
+    // SW 변경 규칙: 변경부에 TODO(검증) 표기 → 검증 완료 후 제거.
+    "todo-tree.general.tags": [
+        "TODO",
+        "FIXME",
+        "BUG",
+        "HACK",
+        "NOTE",
+        "XXX",
+        "검증",
+        "검증후제거",
+        "[ ]",
+        "[x]"
+    ],
+    // 한글 주석(// 검증: ...)도 인식하도록 주석 접두 패턴 확장
+    "todo-tree.regex.regex": "(//|#|<!--|;|/\\*|^|^[ \\t]*(-|\\d+.))\\s*($TAGS)",
+    "todo-tree.highlights.defaultHighlight": {
+        "type": "tag",
+        "foreground": "#ffffff"
+    },
+    "todo-tree.highlights.customHighlight": {
+        "TODO": { "icon": "check", "background": "#ff8c00", "iconColour": "#ff8c00" },
+        "FIXME": { "icon": "alert", "background": "#f06292", "iconColour": "#f06292" },
+        "BUG": { "icon": "bug", "background": "#e53935", "iconColour": "#e53935" },
+        "HACK": { "icon": "tools", "background": "#795548", "iconColour": "#795548" },
+        "NOTE": { "icon": "note", "background": "#43a047", "iconColour": "#43a047" },
+        "검증": { "icon": "verified", "background": "#1e88e5", "iconColour": "#1e88e5" },
+        "검증후제거": { "icon": "trash", "background": "#8e24aa", "iconColour": "#8e24aa" }
+    },
+    "todo-tree.tree.showCountsInTree": true,
+    "todo-tree.general.statusBar": "tags",
+
+    // === Better Comments (주석 의미별 색상) ===
+    //  ! 경고 / ? 질문 / TODO 할일 / 검증·검증후제거 / * 강조 / //(이중) 취소선
+    "better-comments.tags": [
+        { "tag": "!", "color": "#FF2D00", "strikethrough": false, "underline": false, "backgroundColor": "transparent", "bold": false, "italic": false },
+        { "tag": "?", "color": "#3498DB", "strikethrough": false, "underline": false, "backgroundColor": "transparent", "bold": false, "italic": false },
+        { "tag": "todo", "color": "#FF8C00", "strikethrough": false, "underline": false, "backgroundColor": "transparent", "bold": false, "italic": false },
+        { "tag": "검증", "color": "#1E88E5", "strikethrough": false, "underline": false, "backgroundColor": "transparent", "bold": false, "italic": false },
+        { "tag": "검증후제거", "color": "#B968D8", "strikethrough": false, "underline": false, "backgroundColor": "transparent", "bold": true, "italic": false },
+        { "tag": "*", "color": "#43A047", "strikethrough": false, "underline": false, "backgroundColor": "transparent", "bold": false, "italic": false },
+        { "tag": "//", "color": "#9E9E9E", "strikethrough": true, "underline": false, "backgroundColor": "transparent", "bold": false, "italic": false }
+    ]
+}

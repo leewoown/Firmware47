@@ -76,7 +76,7 @@ typedef struct NVRAll_Data
 
 // NVRAM MR25H40
 //
-// A ¿µ¿ª: Metadata (Fixed area)
+// A ì˜ì—­: Metadata (Fixed area)
 
 typedef struct NVRZoneA_Data
 {
@@ -89,8 +89,8 @@ typedef struct NVRZoneA_Data
 
     Uint32 LastState;         // 32-bit state flags
 
-    Uint32 LogHeadIndex;      // B ¿µ¿ª write index
-    Uint32 EventHeadIndex;    // C ¿µ¿ª write index
+    Uint32 LogHeadIndex;      // B ì˜ì—­ write index
+    Uint32 EventHeadIndex;    // C ì˜ì—­ write index
 
     Uint32 SysTimeTick;       // 100ms tick (uint32 -> about 13.6 years)
     Uint32 LastLogTimestamp;  // optional
@@ -99,7 +99,7 @@ typedef struct NVRZoneA_Data
     Uint16 rsvd1[8];          // expansion/padding
 }NVRZoneAReg;
 
-// B ¿µ¿ª: ¿îÀü ÀÌ·Â ·¹ÄÚµå (32B)
+// B ì˜ì—­: ìš´ì „ ì´ë ¥ ë ˆì½”ë“œ (32B)
 typedef struct NVRZoneB_Data
 {
     Uint32 TimeTick;          // 100ms tick
@@ -122,14 +122,14 @@ typedef struct NVRZoneB_Data
     Uint16 rsvd;              // 2B (padding)
 } NVRZoneBReg;
 
-// C ¿µ¿ª: ÀÌº¥Æ® ·¹ÄÚµå (32B)
+// C ì˜ì—­: ì´ë²¤íŠ¸ ë ˆì½”ë“œ (32B)
 typedef struct NVRZoneC_Data
 {
     Uint32 TimeTick;          // 100ms tick
     Uint32 ProtectBits;       // 4B
     Uint32 StateBits;         // 4B
 
-    Uint32 LogIndex;          // reference to B ¿µ¿ª index
+    Uint32 LogIndex;          // reference to B ì˜ì—­ index
 
     int16  Soc;
     Uint16 PackVolt;

@@ -83,10 +83,10 @@ void InitGpio(void)
     //GpioCtrlRegs.GPAMUX2.all = 0x0000;    // GPIO functionality GPIO16-GPIO31
     GpioCtrlRegs.GPAMUX2.bit.GPIO16 = 0; // GPIO, DI, DSW1
     GpioCtrlRegs.GPAMUX2.bit.GPIO17 = 0; // GPIO, DI, DSW2
-    GpioCtrlRegs.GPAMUX2.bit.GPIO18 = 3; // SCITX, DO, RS485A(È¸·Î º¯°æ)<--GPIO44
-    GpioCtrlRegs.GPAMUX2.bit.GPIO19 = 3; // SCIRX, DI, RS485B(È¸·Î º¯°æ)<--GPIO58
-    GpioCtrlRegs.GPAMUX2.bit.GPIO20 = 0; // GIPO, DO, 12VRLY_ON
-    GpioCtrlRegs.GPAMUX2.bit.GPIO21 = 0; // GIPO, DO, 12VRLY_OFF
+    GpioCtrlRegs.GPAMUX2.bit.GPIO18 = 3; // SCITX, DO, RS485A(È¸ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½)<--GPIO44
+    GpioCtrlRegs.GPAMUX2.bit.GPIO19 = 3; // SCIRX, DI, RS485B(È¸ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½)<--GPIO58
+    GpioCtrlRegs.GPAMUX2.bit.GPIO20 = 0; // GPIO, DO, FAN (êµ¬ 12VRLY_ON)      // TODO(ê²€ì¦): ë¼ë²¨ ì •ì •
+    GpioCtrlRegs.GPAMUX2.bit.GPIO21 = 0; // GPIO, DO, PWRHOLD (êµ¬ 12VRLY_OFF) // TODO(ê²€ì¦): ë¼ë²¨ ì •ì •
     GpioCtrlRegs.GPAMUX2.bit.GPIO22 = 0; // GIPO, DO, PRLAY
     GpioCtrlRegs.GPAMUX2.bit.GPIO23 = 0; // GIPO, DI, PRLY_AUX
     GpioCtrlRegs.GPAMUX2.bit.GPIO24 = 0; // GPIO, GATA_EN
@@ -101,11 +101,11 @@ void InitGpio(void)
     GpioCtrlRegs.GPBMUX1.bit.GPIO32 = 0; // GIPO, DO, CAHRLY
     GpioCtrlRegs.GPBMUX1.bit.GPIO33 = 0; // GIPO, DI, CHA_AUX
     GpioCtrlRegs.GPBMUX1.bit.GPIO34 = 0; // NOT USED
-    GpioCtrlRegs.GPBMUX1.bit.GPIO35 = 0; // TDI(»ç¿ë ºÒ°¡´É)
-    GpioCtrlRegs.GPBMUX1.bit.GPIO36 = 0; // TMS(»ç¿ë ºÒ°¡´É)
-    GpioCtrlRegs.GPBMUX1.bit.GPIO37 = 0; // TDO(»ç¿ë ºÒ°¡´É)
-    GpioCtrlRegs.GPBMUX1.bit.GPIO38 = 0; // TCK(»ç¿ë ºÒ°¡´É)
-    GpioCtrlRegs.GPBMUX1.bit.GPIO39 = 0; // NOT CONNECTION(»ç¿ë ºÒ°¡´É)
+    GpioCtrlRegs.GPBMUX1.bit.GPIO35 = 0; // TDI(ï¿½ï¿½ï¿½ ï¿½Ò°ï¿½ï¿½ï¿½)
+    GpioCtrlRegs.GPBMUX1.bit.GPIO36 = 0; // TMS(ï¿½ï¿½ï¿½ ï¿½Ò°ï¿½ï¿½ï¿½)
+    GpioCtrlRegs.GPBMUX1.bit.GPIO37 = 0; // TDO(ï¿½ï¿½ï¿½ ï¿½Ò°ï¿½ï¿½ï¿½)
+    GpioCtrlRegs.GPBMUX1.bit.GPIO38 = 0; // TCK(ï¿½ï¿½ï¿½ ï¿½Ò°ï¿½ï¿½ï¿½)
+    GpioCtrlRegs.GPBMUX1.bit.GPIO39 = 0; // NOT CONNECTION(ï¿½ï¿½ï¿½ ï¿½Ò°ï¿½ï¿½ï¿½)
     GpioCtrlRegs.GPBMUX1.bit.GPIO40 = 0; // GPIO, GATA_H, STA_DIS
     GpioCtrlRegs.GPBMUX1.bit.GPIO41 = 0; // NOT USED, NOT CONNECTION
     GpioCtrlRegs.GPBMUX1.bit.GPIO42 = 0; // GIPO, DO, TCPEN
@@ -115,11 +115,11 @@ void InitGpio(void)
     GpioCtrlRegs.GPBMUX2.bit.GPIO50 = 0; // GPIO, DO, RE485EN
     GpioCtrlRegs.GPBMUX2.bit.GPIO51 = 0; // GPIO, DO, LED02(CANSTATE)
     GpioCtrlRegs.GPBMUX2.bit.GPIO52 = 0; // GPIO, DI, CANXIN1T
-    GpioCtrlRegs.GPBMUX2.bit.GPIO53 = 0; // GPIO, NOT USED (È¸·Î ¼öÁ¤ ÇÊ¿äÇÔ)
+    GpioCtrlRegs.GPBMUX2.bit.GPIO53 = 0; // GPIO, NOT USED (È¸ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ê¿ï¿½ï¿½ï¿½)
     GpioCtrlRegs.GPBMUX2.bit.GPIO54 = 1; //SPIMOSIA
     GpioCtrlRegs.GPBMUX2.bit.GPIO55 = 1; //SPIMISOA
     GpioCtrlRegs.GPBMUX2.bit.GPIO56 = 1; //SPICLK
-    GpioCtrlRegs.GPBMUX2.bit.GPIO57 = 1; //NOT CONNECTION(»ç¿ë ºÒ°¡´É,SPIEN)
+    GpioCtrlRegs.GPBMUX2.bit.GPIO57 = 1; //NOT CONNECTION(ï¿½ï¿½ï¿½ ï¿½Ò°ï¿½ï¿½ï¿½,SPIEN)
     GpioCtrlRegs.GPBMUX2.bit.GPIO58 = 0; //GPIO, DO, LED00(STATE)
 
 
@@ -153,10 +153,10 @@ void InitGpio(void)
     GpioCtrlRegs.GPADIR.bit.GPIO15 = 1; // GPIO, DO, TCPRESET
     GpioCtrlRegs.GPADIR.bit.GPIO16 = 0; // GPIO, DI, DSW1
     GpioCtrlRegs.GPADIR.bit.GPIO17 = 0; // GPIO, DI, DSW2
-    GpioCtrlRegs.GPADIR.bit.GPIO18 = 1; // SCITX, DO, RS485A(È¸·Î º¯°æ)<--GPIO44
-    GpioCtrlRegs.GPADIR.bit.GPIO19 = 0; // SCIRX, DI, RS485B(È¸·Î º¯°æ)<--GPIO58
-    GpioCtrlRegs.GPADIR.bit.GPIO20 = 1; // GIPO, DO, 12VRLY_ON
-    GpioCtrlRegs.GPADIR.bit.GPIO21 = 1; // GIPO, DO, 12VRLY_OFF
+    GpioCtrlRegs.GPADIR.bit.GPIO18 = 1; // SCITX, DO, RS485A(È¸ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½)<--GPIO44
+    GpioCtrlRegs.GPADIR.bit.GPIO19 = 0; // SCIRX, DI, RS485B(È¸ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½)<--GPIO58
+    GpioCtrlRegs.GPADIR.bit.GPIO20 = 1; // GPIO, DO, FAN (êµ¬ 12VRLY_ON)      // TODO(ê²€ì¦): ë¼ë²¨ ì •ì •
+    GpioCtrlRegs.GPADIR.bit.GPIO21 = 1; // GPIO, DO, PWRHOLD (êµ¬ 12VRLY_OFF) // TODO(ê²€ì¦): ë¼ë²¨ ì •ì •
     GpioCtrlRegs.GPADIR.bit.GPIO22 = 1; // GIPO, DO, PRLAY
     GpioCtrlRegs.GPADIR.bit.GPIO23 = 0; // GIPO, DI, PRLY_AUX
     GpioCtrlRegs.GPADIR.bit.GPIO24 = 1; // GPIO, DO, GATA_EN
@@ -171,11 +171,11 @@ void InitGpio(void)
     GpioCtrlRegs.GPBDIR.bit.GPIO32 = 1; // GIPO, DO, CAHRLY
     GpioCtrlRegs.GPBDIR.bit.GPIO33 = 0; // GIPO, DI, CHA_AUX
     GpioCtrlRegs.GPBDIR.bit.GPIO34 = 0; // NOT USED
-    GpioCtrlRegs.GPBDIR.bit.GPIO35 = 0; // TDI(»ç¿ë ºÒ°¡´É)
-    GpioCtrlRegs.GPBDIR.bit.GPIO36 = 0; // TMS(»ç¿ë ºÒ°¡´É)
-    GpioCtrlRegs.GPBDIR.bit.GPIO37 = 0; // TDO(»ç¿ë ºÒ°¡´É)
-    GpioCtrlRegs.GPBDIR.bit.GPIO38 = 0; // TCK(»ç¿ë ºÒ°¡´É)
-    GpioCtrlRegs.GPBDIR.bit.GPIO39 = 0; // NOT CONNECTION(»ç¿ë ºÒ°¡´É)
+    GpioCtrlRegs.GPBDIR.bit.GPIO35 = 0; // TDI(ï¿½ï¿½ï¿½ ï¿½Ò°ï¿½ï¿½ï¿½)
+    GpioCtrlRegs.GPBDIR.bit.GPIO36 = 0; // TMS(ï¿½ï¿½ï¿½ ï¿½Ò°ï¿½ï¿½ï¿½)
+    GpioCtrlRegs.GPBDIR.bit.GPIO37 = 0; // TDO(ï¿½ï¿½ï¿½ ï¿½Ò°ï¿½ï¿½ï¿½)
+    GpioCtrlRegs.GPBDIR.bit.GPIO38 = 0; // TCK(ï¿½ï¿½ï¿½ ï¿½Ò°ï¿½ï¿½ï¿½)
+    GpioCtrlRegs.GPBDIR.bit.GPIO39 = 0; // NOT CONNECTION(ï¿½ï¿½ï¿½ ï¿½Ò°ï¿½ï¿½ï¿½)
     GpioCtrlRegs.GPBDIR.bit.GPIO40 = 0; // GPIO, DO, GATA_H, STA_DIS
     GpioCtrlRegs.GPBDIR.bit.GPIO41 = 0; // NOT USED, NOT CONNECTION
     GpioCtrlRegs.GPBDIR.bit.GPIO42 = 1; // GIPO, DO, TCPEN
@@ -184,11 +184,11 @@ void InitGpio(void)
     GpioCtrlRegs.GPBDIR.bit.GPIO50 = 1; // GPIO, DO, RE485EN
     GpioCtrlRegs.GPBDIR.bit.GPIO51 = 1; // GPIO, DO, LED02(CANSTATE)
     GpioCtrlRegs.GPBDIR.bit.GPIO52 = 0; // GPIO, DI, CANXIN1T
-    GpioCtrlRegs.GPBDIR.bit.GPIO53 = 0; // GPIO, NOT USED (È¸·Î ¼öÁ¤ ÇÊ¿äÇÔ)
+    GpioCtrlRegs.GPBDIR.bit.GPIO53 = 0; // GPIO, NOT USED (È¸ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ê¿ï¿½ï¿½ï¿½)
     GpioCtrlRegs.GPBDIR.bit.GPIO54 = 1; //SPIMOSIA
     GpioCtrlRegs.GPBDIR.bit.GPIO55 = 0; //SPIMISOA
     GpioCtrlRegs.GPBDIR.bit.GPIO56 = 1; //SPICLK
-    GpioCtrlRegs.GPBDIR.bit.GPIO57 = 0; //NOT CONNECTION(»ç¿ë ºÒ°¡´É,SPIEN)
+    GpioCtrlRegs.GPBDIR.bit.GPIO57 = 0; //NOT CONNECTION(ï¿½ï¿½ï¿½ ï¿½Ò°ï¿½ï¿½ï¿½,SPIEN)
     GpioCtrlRegs.GPBDIR.bit.GPIO58 = 1; //GPIO, DO, LED00(STATE)
 
     //

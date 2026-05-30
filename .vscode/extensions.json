@@ -1,0 +1,14 @@
+{
+    "recommendations": [
+        "anthropic.claude-code",
+        "ms-vscode.cpptools",
+        "ms-vscode.cpptools-extension-pack",
+        "jeff-hykin.better-c-syntax",
+        "eamodio.gitlens",
+        "gruntfuggly.todo-tree",
+        "usernamehw.errorlens",
+        "alefragnani.bookmarks",
+        "aaron-bond.better-comments",
+        "ms-ceintl.vscode-language-pack-ko"
+    ]
+}

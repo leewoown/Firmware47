@@ -53,7 +53,7 @@ void Cal80VSysVoltageHandle(SystemReg *s);
 void Cal80VSysTemperatureHandle(SystemReg *s);
 void Cal80VSysCurrentHandle(SystemReg *s);
 /*
- * SOC �˰�����
+ * SOC 알고지름
  */
 
 void CalSocRegsInit(SocReg *P);
@@ -64,17 +64,8 @@ void CalSocHandle(SocReg *P);
  */
 void Cal80VSysFaultCheck(SystemReg *s);
 void Cal80VSysAlarmtCheck(SystemReg *s);
-/*
- *
- */
-void Cal12VSysVoltageHandle(SystemReg *s);
-void Cal12VSysTemperatureHandle(SystemReg *s);
-void Cal12VSysCurrentHandle(SystemReg *s);
-/*
- *
- */
-void Cal12VSysAlarmtCheck(SystemReg *s);
-void Cal12VSysFaultCheck(SystemReg *s);
+void PWRHoldHandle(SystemReg *s);
+
 
 void NVRAM_AZoneSaveHandler(NVRZoneAReg *p);
 void NVRAM_AZoneReadHandler(NVRZoneAReg *p);
@@ -116,7 +107,7 @@ void SalveTempsVoltHandler(SlaveReg *s);
 void SalveTempsVoltHandler_B(SlaveReg *s);
 void TempTemps(SystemReg *s);
 /*
- *  ���ͷ�Ʈ �Լ� ����
+ *  인터럽트 함수 선언
  */
 interrupt void cpu_timer0_isr(void);
 interrupt void ISR_CANRXINTA(void);
@@ -130,7 +121,7 @@ PrtectRelayReg  PrtectRelayRegs;
 
 SlaveReg        Slave1Regs;
 SlaveReg        Slave2Regs;
-SlaveReg        Slave3Regs;
+//SlaveReg        Slave3Regs;
 
 NVRAllReg       NVRAllRegs;
 NVRZoneAReg     NVRZoneAWRRegs;
@@ -189,7 +180,7 @@ void main(void)
     EALLOW;  // This is needed to write to EALLOW protected registers
 
     /*
-     *  ���ͷ�Ʈ �Լ� ����
+     *  인터럽트 함수 선언
      */
     PieVectTable.TINT0 = &cpu_timer0_isr;
     PieVectTable.ECAN0INTA  = &ISR_CANRXINTA;
@@ -230,18 +221,26 @@ void main(void)
     SysRegs.SysMachine =System_STATE_INIT;
     Slave1Regs.StateMachine =STATE_BATIDLE;
     Slave2Regs.StateMachine =STATE_BATIDLE;
-    Slave3Regs.StateMachine =STATE_BATIDLE;
+//    Slave3Regs.StateMachine =STATE_BATIDLE;
     while(1)
     {
+
         SysRegs.Maincount++;
-        switch(SysRegs.SysMachine)
+        /* 부팅 초기화 완료(INITOK=1) 후에는 VCU 통신 끊김(PackCAN_ERR) 여부와
+         * 무관하게 CAN 송신을 항상 활성 유지 */
+        if(SysRegs.BAT80VStateReg.bit.INITOK==1)
         {
+            SysRegs.BAT80VStateReg.bit.CANCOMEnable=1;
+        }
+        switch(SysRegs.SysMachine)
+        { 
             case System_STATE_INIT:
-                SysRegs.BAT80VStateReg.bit.SysSTATE = 0;
+                 SysRegs.BAT80VStateReg.bit.SysSTATE = 0;
                  SysTimerINIT(&SysRegs);
                  SysVarINIT(&SysRegs);
                  CANRegVarINIT(&CANARegs);
                  CalSocRegsInit(&Farasis56AhSocRegs);
+                 ProtectRelayVarINIT(&PrtectRelayRegs);
                  SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=0;
                  SysRegs.BAT80VDigitalOutPutReg.bit.LEDFaultOUT=0;
                  SysRegs.BAT80VDigitalOutPutReg.bit.LEDProtectOUT=0;
@@ -251,6 +250,8 @@ void main(void)
                  NVRAllRegs.SEQTimeTick=0;
                  CANARegs.BAT80VFaultCT = 0;
                  SysRegs.Bat80VFaultCurrentF=0.0;
+                 SysRegs.Bat80VFaultCurrentF=0.0;
+
                  /*
                   *
                   */
@@ -295,6 +296,7 @@ void main(void)
                  SysRegs.BalanceModeCount=0;
                  SysRegs.BalanceTimeCount=0;
                  Farasis56AhSocRegs.state=SOC_STATE_IDLE;
+                
                  SysRegs.BAT80VFaulBuftReg.all=0;
                  /*
                   * CELL VOLTAGE measurement
@@ -313,8 +315,8 @@ void main(void)
                       * Initialize SOC calculation
                       */
                  }
-                 memcpy(&SysRegs.Bat80VCellVoltageF[0],     &Slave1Regs.CellVoltageF[0],sizeof(float32)*12);
-                 memcpy(&SysRegs.Bat80VCellVoltageF[12],    &Slave2Regs.CellVoltageF[0],sizeof(float32)*12);
+                 memcpy(&SysRegs.Bat80VCellVoltageF[0],     &Slave1Regs.CellVoltageF[0],sizeof(float32)*11);
+                 memcpy(&SysRegs.Bat80VCellVoltageF[11],    &Slave2Regs.CellVoltageF[0],sizeof(float32)*11);
                  Cal80VSysVoltageHandle(&SysRegs);
                  /*
                   * CELL temperature measurement
@@ -343,65 +345,113 @@ void main(void)
                  //Farasis56AhSocRegs.NVRSocInitF = (float32)NVRZoneARDRegs.LastSOC/10.0F;
 
                  /*----------------------------------------
-                  * 1. ��� �� ���� �Է�
+                  * 1. 평균 셀 전압 입력
                   *----------------------------------------*/
                  Farasis56AhSocRegs.CellAgvVoltageF = SysRegs.Bat80VCellAgvVoltageF;
                  /*----------------------------------------
-                  * 2. NVR SOC �Է�
+                  * 2. NVR SOC 입력
                   *----------------------------------------*/
                  NVRAM_AZoneReadHandler(&NVRZoneARDRegs);
                  Farasis56AhSocRegs.NVRSocInitF = (float32)NVRZoneARDRegs.LastSOC / 10.0F;
 
-                 /* NVR �� ��ȣ */
-                 if(Farasis56AhSocRegs.NVRSocInitF > 100.0F)
-                 {
-                     Farasis56AhSocRegs.NVRSocInitF = 100.0F;
-                 }
-                 else if(Farasis56AhSocRegs.NVRSocInitF < 0.0F)
-                 {
-                     Farasis56AhSocRegs.NVRSocInitF = 0.0F;
-                 }
+                 /* NVR TODO: 한글 주석 복구 필요(원본 인코딩 손상) */
+                //  if(Farasis56AhSocRegs.NVRSocInitF > 100.0F)
+                //  {
+                //      Farasis56AhSocRegs.NVRSocInitF = 100.0F;
+                //  }
+                //  else if(Farasis56AhSocRegs.NVRSocInitF < 0.0F)
+                //  {
+                //      Farasis56AhSocRegs.NVRSocInitF = 0.0F;
+                //  }
+                /* NVR 유효성 검증 — 비정상이면 무효 마커(-1)로 표시 */
+                if((NVRZoneARDRegs.LastSOC < 0) ||                         /* 음수 (0xFFFF=-1 포함) */
+                (NVRZoneARDRegs.LastSOC > 1000) ||                         /* 100% 초과 */
+                (NVRZoneARDRegs.MetaVersion == 0xFFFF) ||                  /* 첫 부팅 (Flash 미초기화) */
+                (NVRZoneARDRegs.MetaVersion == 0))                         /* MetaVersion 손상 */
+                {
+                    /* 무효: OCV로 강제 */
+                    Farasis56AhSocRegs.NVRSocInitF = -1.0F;                   /* 무효 마커 */
+                    
+                }
+                else
+                {
+                    Farasis56AhSocRegs.NVRSocInitF = (float32)NVRZoneARDRegs.LastSOC / 10.0F;
+                    /* 정상 범위는 NVR 사용 */
+                    if(Farasis56AhSocRegs.NVRSocInitF > 100.0F)
+                    {
+                        Farasis56AhSocRegs.NVRSocInitF = 100.0F;
+                    }
+                    else if(Farasis56AhSocRegs.NVRSocInitF < 0.0F)
+                    {
+                        Farasis56AhSocRegs.NVRSocInitF = 0.0F;
+                    }
+                }
                  /*----------------------------------------
-                  * 3. SOC �ʱ�ȭ (OCV + NVR �Ǵ�)
+                  * 3. SOC 초기화 (OCV + NVR 판단)
                   *----------------------------------------*/
 
                  CellP56AhSocInit(&Farasis56AhSocRegs);
 
                  /*----------------------------------------
-                  * 4. �ý��� SOC �ݿ�
+                  * 4. 시스템 SOC 반영
                   *----------------------------------------*/
                  Farasis56AhSocRegs.delta = fabs(Farasis56AhSocRegs.SOCbufF - Farasis56AhSocRegs.NVRSocInitF);
-                 /* OCV ���� SOCbufF ��� (�̹� ���� ��) */
+                 /* OCV 값은 SOCbufF 사용 (이미 계산된 값) */
                  if((Farasis56AhSocRegs.SOCbufF >= C_SocOCVLinearMinF) && (Farasis56AhSocRegs.SOCbufF <= C_SocOCVLinearMaxF))
                  {
-                     /* ���� ���� */
-                     if(Farasis56AhSocRegs.delta > 20.0F)
-                     {
-                         /* NVR �̻� �� OCV ��� */
-                         Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.SOCbufF;
-                     }
-                     else
-                     {
-                         /* NVR ���� �� NVR ��� */
-                         Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
-                     }
+                    //  /* TODO: 한글 주석 복구 필요(원본 인코딩 손상) */
+                    //  if(Farasis56AhSocRegs.delta > 20.0F)
+                    //  {
+                    //      /* NVR TODO: 한글 주석 복구 필요(원본 인코딩 손상) OCV TODO: 한글 주석 복구 필요(원본 인코딩 손상) */
+                    //      Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.SOCbufF;
+                    //  }
+                    //  else
+                    //  {
+                    //      /* NVR TODO: 한글 주석 복구 필요(원본 인코딩 손상) NVR TODO: 한글 주석 복구 필요(원본 인코딩 손상) */
+                    //      Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
+                    //  }
+                        /* 선형 영역 */
+                    if((Farasis56AhSocRegs.NVRSocInitF < 0.0F) ||              /* NVR 무효 */
+                       (Farasis56AhSocRegs.delta > 20.0F))                     /* NVR과 차이 큼 */
+                    {
+                        Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.SOCbufF;
+                    }
+                    else
+                    {
+                        Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
+                    }
                  }
                  else
                  {
-                     /* ��ź ���� �� NVR ��� */
-                     Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
+                    /* 비선형 영역 → NVR 사용, 단 NVR 무효 또는 OCV와 큰 괴리면 OCV 강제 */
+                    // TODO(검증): stale NVR(예: 3.56V인데 NVR=100%) 방지 — delta>20% 시 OCV 폴백 추가
+                    if((Farasis56AhSocRegs.NVRSocInitF < 0.0F) ||              /* NVR 무효 */
+                       (Farasis56AhSocRegs.delta > 20.0F))                     /* NVR과 차이 큼(stale) */
+                    {
+                        /* NVR 무효 or OCV와 큰 괴리: OCV 결과 사용 (clamp된 0 또는 100) */
+                        Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.SOCbufF;
+                    }
+                    else
+                    {
+                        Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
+                    }
                  }
+                //  else
+                //  {
+                //      /* TODO: 한글 주석 복구 필요(원본 인코딩 손상) NVR TODO: 한글 주석 복구 필요(원본 인코딩 손상) */
+                //      Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
+                //  }
 
                  /*----------------------------------------
-                  * �ʱ� ���� ���� (�߿�)
+                  * 초기 상태 정렬 (중요)
                   *----------------------------------------*/
                  Farasis56AhSocRegs.SysAhF    = 0.0F;
                  Farasis56AhSocRegs.SysAhOldF = 0.0F;
                  Farasis56AhSocRegs.SysAhNewF = 0.0F;
-                 /* ���� SOC */
+                 /* 최종 SOC */
                  Farasis56AhSocRegs.SysSOCF = Farasis56AhSocRegs.SysSocInitF;
                  /*----------------------------------------
-                  * 5. ���� ����
+                  * 5. 상태 전이
                   *----------------------------------------*/
                  SysRegs.SysMachine=System_STATE_STANDBY;
 
@@ -652,7 +702,7 @@ void main(void)
                       NVRZoneAWRRegs.MetaVersion=Product_Version;
                       NVRZoneAWRRegs.SysTimeTick++;
                       NVRZoneAWRRegs.LastState = SysRegs.BAT80VStateReg.all;
-                      NVRZoneAWRRegs.LastSOC   = (int16)SysRegs.Bat80VSOCF*10;
+                      NVRZoneAWRRegs.LastSOC   = (int16)(SysRegs.Bat80VSOCF * 10.0F);
                       NVRAM_AZoneSaveHandler(&NVRZoneAWRRegs);
                       NVRAllRegs.SEQ=NVRAM_AZoneRead;
                       NVRAllRegs.DebugCount++;
@@ -684,7 +734,7 @@ void main(void)
                      NVRZoneAWRRegs.LastLogTimestamp=0;
                      NVRZoneAWRRegs.LastEventTimestamp=0;
                    //  NVRAM_AZoneSaveHandler(&NVRZoneAWRRegs);
-                     SysRegs.SysMachine=System_STATE_INIT;
+                    // SysRegs.SysMachine=System_STATE_INIT;
                      NVRAllRegs.SEQ=NVRAM_AZoneRead;
                 break;
                 case NVRAM_NVRforceWR :
@@ -743,6 +793,7 @@ interrupt void cpu_timer0_isr(void)
   /*
    * current sensing detection
    */
+   //TODO : 전류적산 알고리즘
    if(SysRegs.BAT80VStateReg.bit.INITOK==1)
    {
        Cal80VSysCurrentHandle(&SysRegs);
@@ -1107,8 +1158,10 @@ interrupt void cpu_timer0_isr(void)
        default :
        break;
    }
+   
    PrtectRelayRegs.SysFanMaxTempF=SysRegs.Bat80VCellMaxTemperatureF;
    Bat80V_FanControlHandle(&PrtectRelayRegs);
+   PWRHoldHandle(&SysRegs);
    DigitalOutput(&SysRegs);
 
    //
@@ -1123,6 +1176,7 @@ interrupt void ISR_CANRXINTA(void)
    // struct ECAN_REGS ECanaShadow;
     if(ECanaRegs.CANGIF0.bit.GMIF0 == 1)
     {
+        
         CANARegs.MailBoxRxCount++;
         if(CANARegs.MailBoxRxCount>200){CANARegs.MailBoxRxCount=0;}
         if(ECanaRegs.CANRMP.bit.RMP0==1)
@@ -1183,6 +1237,60 @@ interrupt void ISR_CANRXINTA(void)
     PieCtrlRegs.PIEACK.all = PIEACK_GROUP9;
 
 }//EOF
+
+/*========================================
+ * PWRHoldHandle : BMS 전원 유지(PWRHOLD, GPIO21) 제어
+ *   ※ 1ms ISR 주기 호출 전제 (C_PwrHoldOffDelayCount = 1ms×300000 = 5분)
+ *
+ *   - RUNStatus == 1 : VCU RUN 명령 → 전원 유지 (PWRHOLD_ON)
+ *   - RUNStatus == 0 : RUN 종료 → VCU 통신 상태로 분기
+ *       · 통신 끊김  : 원 OFF 판단 → 5분전 유지 후 PWRHOLD_OFF (대기 중 CAN 통신은 유지)
+ *       · 통신 정상  : BMS 전원 ON 판단 → PWRHOLD_ON (SOC는 전류적산 + NVRAM으로만 계속)
+ *
+ *   VCU 통신 상태는 수신 워치독(s->SysCanRxCount)으로 판정:
+ *     VCU 수신 시 ISR에서 0 리셋, 100ms마다 증가. C_VcuCommLostCount 이상이면 끊김.
+ *
+ *   TODO(검증 필요): 실기 검증 전 신규 로직. 검증 항목 —
+ *     (1) ISR 주기 1ms 여부(CpuTimer0 PRD=80400), (2) GPIO21 극성(High=전원유지),
+ *     (3) VCU 미연결 시 ~5분 후 자동 PWRHOLD_OFF 동작, (4) 통신 복구 시 카운트 리셋.
+ *     검증 완료 후 본 TODO 제거.
+ *========================================*/
+void PWRHoldHandle(SystemReg *s)
+{
+    static Uint32 PwrOffDelayCount = 0u;
+    Uint16 VcuCommLost;
+
+    VcuCommLost = (s->SysCanRxCount >= C_VcuCommLostCount) ? 1u : 0u;
+
+    if(CANARegs.PMSCMDRegs.bit.RUNStatus == 1u)
+    {
+        /* VCU RUN 명령 → 전원 유지 */
+        PWRHOLD_ON;
+        PwrOffDelayCount = 0u;
+    }
+    else
+    {
+        /* RUNStatus == 0 : RUN 종료 */
+        if(VcuCommLost == 1u)
+        {
+            /* VCU 통신 끊김 → 전원 OFF 판단. 5분 유지 후 PWRHOLD_OFF */
+            if(PwrOffDelayCount < C_PwrHoldOffDelayCount)
+            {
+                PwrOffDelayCount++;
+            }
+            else
+            {
+                PWRHOLD_OFF;
+            }
+        }
+        else
+        {
+            /* VCU 통신 정상 → BMS 전원 ON 판단, 전원 유지 (SOC는 전류적산 + NVRAM) */
+            PWRHOLD_ON;
+            PwrOffDelayCount = 0u;
+        }
+    }
+}
 /*
 interrupt void cpu_timer2_isr(void)
 {  EALLOW;

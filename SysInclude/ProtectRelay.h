@@ -1,9 +1,9 @@
 /* ==============================================================================
-System Name:  Çö´ëÀÚµ¿Â÷ ¼ö¼Ò Áö°ÔÂ÷ 80V
+System Name:  ï¿½ï¿½ï¿½ï¿½ï¿½Úµï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 80V
 
 File Name:		PARAMETER.H
 
-Description:	Çö´ë
+Description:	ï¿½ï¿½ï¿½ï¿½
           	    Orientation Control for a Three Phase AC Induction Motor. 
 
 Originator:		Digital control systems Group - Texas Instruments
@@ -61,20 +61,19 @@ typedef enum
 struct ProtectRelayState_BIT
 {       // bits   description
     unsigned int     WakeUpEN                    :1; // 0
-    unsigned int     PRelayDI                    :1; // 0
-    unsigned int     NRelayDI                    :1; // 1
-    unsigned int     PreRelayDI                  :1; // 2
-    unsigned int     PRelayDO                    :1; // 3
-    unsigned int     NRelayDO                    :1; // 4
-    unsigned int     PreRelayDO                  :1; // 5
-    unsigned int     LatchRelayOn                :1; // 6
-    unsigned int     LatchRelayOFF               :1; // 7
-    unsigned int     ProtectRelayCyle            :1; // 8
-    unsigned int     STATE09                     :1; // 9
-    unsigned int     STATE10                     :1; // 10
-    unsigned int     STATE11                     :1; // 11
-    unsigned int     STATE12                     :1; // 12
-    unsigned int     WakeUpState                   :1; // 13
+    unsigned int     PRelayDI                    :1; // 1
+    unsigned int     NRelayDI                    :1; // 2
+    unsigned int     PreRelayDI                  :1; // 3
+    unsigned int     PRelayDO                    :1; // 4
+    unsigned int     NRelayDO                    :1; // 5
+    unsigned int     PreRelayDO                  :1; // 6
+    unsigned int     LatchRelayOn                :1; // 7
+    unsigned int     LatchRelayOFF               :1; // 8
+    unsigned int     ProtectRelayCyle            :1; // 9
+    unsigned int     STATE09                     :1; // 10
+    unsigned int     STATE10                     :1; // 11
+    unsigned int     STATE11                     :1; // 12
+    unsigned int     WakeUpState                 :1; // 13
     unsigned int     WakeUpSEQERR                :1; // 14
     unsigned int     RlyFaulttSate               :1; // 15
 };
@@ -105,7 +104,7 @@ extern void ProtectRelaySateCheck(PrtectRelayReg *p);
 extern void ProtectRelayVarINIT(PrtectRelayReg *p);
 extern void ProtectOffHandle(PrtectRelayReg *p);
 extern void ProtectRelayWakeUpHandle(PrtectRelayReg *p);
-extern void ProtecLatchRelayHandle(PrtectRelayReg *p);
+//extern void ProtecLatchRelayHandle(PrtectRelayReg *p);   // TODO(ë¯¸ì‚¬ìš© - ê²€ì¦ í›„ ì œê±° ì˜ˆì •)
 #endif  // end of PARAMETER.H definition
 
 

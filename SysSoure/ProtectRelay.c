@@ -13,7 +13,7 @@ extern void ProtectRelaySateCheck(PrtectRelayReg *p);
 extern void ProtectRelayVarINIT(PrtectRelayReg *p);
 extern void ProtectOffHandle(PrtectRelayReg *p);
 extern void ProtectRelayWakeUpHandle(PrtectRelayReg *p);
-extern void ProtecLatchRelayHandle(PrtectRelayReg *p);
+//extern void ProtecLatchRelayHandle(PrtectRelayReg *p);   // TODO(미사용 - 검증 후 제거 예정)
 extern void Bat80V_FanControlHandle(PrtectRelayReg *p);
 void ProtectRelayVarINIT(PrtectRelayReg *p)
 {
@@ -24,43 +24,43 @@ void ProtectRelayVarINIT(PrtectRelayReg *p)
     p->WakeUpOnTimeOutCount=0;
     p->WakeUpOffTimeOutCount=0;
     p->StateMachine=STATE_WakeUpReady;
+    p->FanMachine=FAN_STATE_OFF;     // ← 추가
+    p->SysFanMaxTempF=0.0F;          // ← 추가
 }
-
-
 void Bat80V_FanControlHandle(PrtectRelayReg *p)
 {
-    /* ���� �ִ� �µ� */
+    /* 현재 최대 온도 */
     float32 MaxTempF = p->SysFanMaxTempF;
 
     switch (p->FanMachine)
     {
         case FAN_STATE_OFF:
         {
-            /* OFF �� ON ���� */
+            /* OFF → ON 조건 */
             if (Hyst_On(MaxTempF, 30.0))
             {
                 p->FanMachine = FAN_STATE_ON;
-                LatchSetRlyON;
+                FAN_ON;
             }
             break;
         }
 
         case FAN_STATE_ON:
         {
-            /* ON �� OFF ���� */
+            /* ON → OFF 조건 */
             if (Hyst_Off(MaxTempF, 28.0))
             {
                 p->FanMachine = FAN_STATE_OFF;
-                LatchSetRlyOFF;
+                FAN_OFF;
             }
             break;
         }
 
         default:
         {
-            /* ���� ��� */
+            /* 예외 방어 */
             p->FanMachine = FAN_STATE_OFF;
-            LatchSetRlyOFF;
+            FAN_OFF;
             break;
         }
     }
@@ -170,6 +170,9 @@ void ProtectRelayHandle(PrtectRelayReg *p)
         p->State.bit.ProtectRelayCyle=1;
     }
 }
+/* TODO(미사용 - 검증 후 제거 예정): 본 프로젝트에서 호출하지 않음
+ * (유일 호출처 main.c 주석처리됨). GPIO20은 FAN_ON/FAN_OFF로 용도 변경됨. */
+#if 0
 void ProtecLatchRelayHandle(PrtectRelayReg *p)
 {
     if(p->State.bit.LatchRelayOn==1)
@@ -188,4 +191,5 @@ void ProtecLatchRelayHandle(PrtectRelayReg *p)
     }
 
 }
+#endif
 

@@ -39,10 +39,25 @@ Note: In this software, the default inverter is supposed to be DMC1500 board.
 /*========================================
  * SOC 연산 공통 설정 (셀 변경 시 수정 없음)
  *========================================*/
+// TODO(검증 후 삭제): OCV 재보정 제거로 미사용. 동작 검증 후 제거 예정
 #define C_SocReInitCurrentAbsF    1.0F        // 저전류 판단 기준 (시스템별 튜닝 가능)
+/*--------------------------------------------------------------------
+ * 전류 적분 deadband
+ *   |I| < 이 값 → 측정 노이즈로 간주, Coulomb Counting 적분 차단
+ *
+ *   현재 값 0.5A : Honeywell CSNV700 (Flux Gate, ±700A) 기준
+ *     - 오프셋 ±0.05A (±3σ)  →  약 10σ 마진
+ *     - 저전류 오차 ±0.1A (|I|≤20A, ±3σ)
+ *
+ *   ※ 다른 전류 센서로 교체 시 :
+ *     해당 센서 오프셋 사양 × 약 10배로 재계산
+ *     예) LEM HASS, Tamura 등 — 데이터시트의 offset error(±σ) 확인
+ *-------------------------------------------------------------------*/
+#define C_SocCurrentDeadbandF     0.5F        // [A] 적분 노이즈 차단 임계값
 #define C_SocCumulativeTime       0.00027778F // 1/3600 (고정)
 #define C_CTSampleTime            0.05F       // 50msec (고정)
 #define C_SocSamPleCount          50u         // ISR 1ms 기준 (고정)
+// TODO(검증 후 삭제): OCV 재보정 제거로 미사용. 동작 검증 후 제거 예정
 #define C_SocReInitDelayCount     6000u       // 저전류 유지 시간 (시스템 튜닝 가능)
 
 
@@ -66,6 +81,20 @@ Note: In this software, the default inverter is supposed to be DMC1500 board.
  *========================================*/
 #define C_SocOCVLinearMinF       20.0F        // ⚠️ [셀 특성 따라 조정] 선형구간 시작 SOC
 #define C_SocOCVLinearMaxF       80.0F        // ⚠️ [셀 특성 따라 조정] 선형구간 끝 SOC
+
+/*========================================
+ * OCV-SOC Lookup Table (정밀도 ±0.5%)
+ *========================================*/
+typedef struct
+{
+    float32 OCV;       /* 셀 평균 전압 (V) */
+    float32 SysSOC;    /* 시스템 SOC (%) */
+} OCVtoSOC_Point;
+
+#define P56AH_OCV_TABLE_SIZE   17
+//extern void   CellP56AhSocInit(SocReg *P);
+extern const OCVtoSOC_Point P56AhOCVTable[P56AH_OCV_TABLE_SIZE];
+extern float32 OCVtoSOC_P56Ah(float32 ocv);
 
 #endif
 
