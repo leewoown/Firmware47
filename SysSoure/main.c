@@ -546,6 +546,8 @@ void main(void)
                      SysRegs.BAT80VFaulBuftReg.all=0;
                      SysRegs.BAT80VFaultReg.all=0;
                      SysRegs.BAT80VStateReg.bit.SysFault=0;
+                     PrtectRelayRegs.State.all=0;
+                     ProtectRelayVarINIT(&PrtectRelayRegs); // TODOS : 26.06.30 Fault 이후에 FCU(VCU)에서 리셋 이후에 릴레이 시퀀스 개선 
                      delay_ms(200);
                      SysRegs.SysMachine=System_STATE_READY;
                  }
@@ -914,7 +916,7 @@ interrupt void cpu_timer0_isr(void)
                CANARegs.BAT80VStatus.bit.BalanceEN           = SysRegs.BAT80VStateReg.bit.BalanceMode;
                SysRegs.BAT80VStateReg.bit.SocMode            = Farasis56AhSocRegs.SoCStateRegs.bit.CalMeth;
                CANARegs.BAT80VAh                             = (int)(Farasis56AhSocRegs.SysAhF*10);
-               CANATX(0x602,8,CANARegs.BAT80VStatus.all,CANARegs.BAT80VDigitalOutPutReg.all,CANARegs.BAT80VAh,SysRegs.BAT80VStateReg.all);
+               CANATX(0x602,8,CANARegs.BAT80VStatus.all,CANARegs.BAT80VDigitalOutPutReg.all,SysRegs.BAT80VStateReg.all,0X000);
        default :
        break;
    }
@@ -971,7 +973,7 @@ interrupt void cpu_timer0_isr(void)
                 //At 80MHZ, operation time is 0.151msec
                if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                {
-                   CANATX(0x603,8,SysRegs.BAT80VAlarmReg.all,SysRegs.BAT80VFaultReg.Word.DataL,SysRegs.BAT80VFaultReg.Word.DataH,0X000);
+                   CANATX(0x603,8,SysRegs.BAT80VAlarmReg.all,SysRegs.BAT80VFaultReg.Word.DataL,SysRegs.BAT80VFaultReg.Word.DataH,CANARegs.BAT80VAh);
                }
        break;
        case 11:

@@ -196,7 +196,7 @@ void CalFarasis52AhSocInit(SocReg *P)
         else
         {
             /* 비선형 */
-            // TODO(검증): NVR이 OCV와 크게 다르면(stale NVR) OCV 폴백 — delta 체크 추가
+            // TODO(완료) :NVR이 OCV와 크게 다르면(stale NVR) OCV 폴백 — delta 체크 추가
             if((NVRValid == 0u) || (P->delta > 20.0F))
             {
                 P->SysSocInitF = P->SOCbufF;

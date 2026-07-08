@@ -179,8 +179,8 @@ struct DigitalOutPut_BIT
     unsigned int     LEDAlarmOUT            :1; // 8
     unsigned int     LEDFaultOUT            :1; // 9
     unsigned int     LEDProtectOUT          :1; // 10
-    unsigned int     DO011                  :1; // 11
-    unsigned int     DO012                  :1; // 12
+    unsigned int     FNAOUT                 :1; // 11
+    unsigned int     PWRHoldOUT             :1; // 12
     unsigned int     DO013                  :1; // 13
     unsigned int     DO014                  :1; // 14
     unsigned int     DO015                  :1; // 15
