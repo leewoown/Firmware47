@@ -462,7 +462,6 @@ void main(void)
                   SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=0;
                   SysRegs.BAT80VDigitalOutPutReg.bit.LEDFaultOUT=0;
                   SysRegs.BAT80VStateReg.bit.SysSTATE = 1;
-
                   /*
                    * SChange the state machine to System_STATE_READY
                    */
@@ -539,7 +538,7 @@ void main(void)
                      ProtectRelayHandle(&PrtectRelayRegs);
                    // SysRegs.SysMachine=System_STATE_STANDBY;
                  }
-                 if(CANARegs.PMSCMDRegs.bit.PrtctReset==1)
+                 if(CANARegs.PMSCMDRegs.bit.PrtctReset==1) //TODO : PrtctReset은 Res
                  {
                      CANARegs.PMSCMDRegs.bit.PrtctReset=0;
                      SysRegs.BAT80VFaultReg.all=0;
@@ -837,13 +836,15 @@ interrupt void cpu_timer0_isr(void)
        SysRegs.BAT80VStateReg.bit.SysAalarm=0;
        SysRegs.BAT80VStateReg.bit.SysFault=0;
    }
-   if(CANARegs.PMSCMDRegs.bit.PrtctReset==1)
+  if(CANARegs.PMSCMDRegs.bit.PrtctReset==1)
    {
        CANARegs.PMSCMDRegs.bit.PrtctReset=0;
        SysRegs.BAT80VFaultReg.all=0;
        SysRegs.BAT80VFaulBuftReg.all=0;
        SysRegs.BAT80VFaultReg.all=0;
        SysRegs.BAT80VStateReg.bit.SysFault=0;
+       PrtectRelayRegs.State.all=0;          // WakeUpState/WakeUpEN/ProtectRelayCyle 리셋
+       ProtectRelayVarINIT(&PrtectRelayRegs);
        delay_ms(50);
        SysRegs.SysMachine=System_STATE_READY;
    }
@@ -1055,7 +1056,7 @@ interrupt void cpu_timer0_isr(void)
                    CANARegs.CellIRTxA = (CANARegs.CellIRTxNum+0<24) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellIRTxNum+0] : 0;
                    CANARegs.CellIRTxB = (CANARegs.CellIRTxNum+0<24) ? CANARegs.BAT80VoltageCell[CANARegs.CellIRTxNum+0] : 0;
                    CANARegs.CellIRTxC = (CANARegs.CellIRTxNum+0<24) ? CANARegs.BAT80VoltageCell[CANARegs.CellIRTxNum+0] : 0;
-                   CANATX(0x609,8,CANARegs.CellIRTxNum,CANARegs.CellIRTxA ,CANARegs.CellIRTxB, CANARegs.CellIRTxC );
+                 //  CANATX(0x609,8,CANARegs.CellIRTxNum,CANARegs.CellIRTxA ,CANARegs.CellIRTxB, CANARegs.CellIRTxC );
                    if(CANARegs.CellIRTxNum>=24)
                    {
                        CANARegs.CellIRTxNum =0;
@@ -1089,7 +1090,7 @@ interrupt void cpu_timer0_isr(void)
                     CANARegs.CellIRTxA = (CANARegs.CellIRTxNum+0<24) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellIRTxNum+0] : 0;
                     CANARegs.CellIRTxB = (CANARegs.CellIRTxNum+1<24) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellIRTxNum+1] : 0;
                     CANARegs.CellIRTxC = (CANARegs.CellIRTxNum+2<24) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellIRTxNum+2] : 0;
-                    CANATX(0x60A,8,CANARegs.CellIRTxNum,CANARegs.CellIRTxA ,CANARegs.CellIRTxB, 0);
+                  //  CANATX(0x60A,8,CANARegs.CellIRTxNum,CANARegs.CellIRTxA ,CANARegs.CellIRTxB, 0);
                     CANARegs.CellIRTxNum +=3;
                     if(CANARegs.CellIRTxNum>=24)
                     {
