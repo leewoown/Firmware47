@@ -294,7 +294,7 @@ Parameter
 #define     Product_Voltage                    768  // 3.664*22
 #define     Product_Capacity                   400  //
 #define     Product_Type                       0    // TODOS 26.07.02 TEST 버전 1 양상버전 
-#define     Product_Version                    11   // TODOS 26.07.02 TEST 버전 관리  
+#define     Product_Version                    12   // TODOS 26.07.02 TEST 버전 관리
 #define     Bat80VSysVoltMax                 924 //4.2*22
 #define     Bat80VSysVoltMin                 616  //2.8*22
 
