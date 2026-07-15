@@ -628,7 +628,8 @@ typedef struct CANA_DATA
 
     Uint16 BAT80VTemperatureMAXNUM;
     Uint16 BAT80VTemperatureMINNUM;
-    union  WORD2BYTE_Reg    SwVerProducttype;
+    Uint16 SwVerProducttype;
+  //  union  WORD2BYTE_Reg    SwVerProducttype;
     union  WORD2BYTE_Reg    BatConfParallelSerial;
     union  NVRSET_REG       NVRSetRegs;
     /*

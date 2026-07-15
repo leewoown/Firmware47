@@ -9,7 +9,8 @@
         "*.ccxml": "xml",
         "*.ccsproject": "xml",
         "*.cproject": "xml",
-        "*.project": "xml"
+        "*.project": "xml",
+        "dsp28x1_project": "c"
     },
     "files.exclude": {
         "**/.metadata": true,

@@ -1142,7 +1142,6 @@ interrupt void cpu_timer0_isr(void)
    }
    if(SysRegs.SysRegTimer500msecCount >SysRegTimer500msec)
    {
-       //CANATX(0x60D,8,CANARegs.SwVerProducttype.all,Product_Voltage,Product_Capacity,CANARegs.BAT80VConfing);
        SysRegs.SysRegTimer500msecCount=0;
    }
    switch(SysRegs.SysRegTimer1000msecCount)
@@ -1151,10 +1150,11 @@ interrupt void cpu_timer0_isr(void)
 
                if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                {
-                   CANARegs.SwVerProducttype.byte.BYTEL = Product_Type;
-                   CANARegs.SwVerProducttype.byte.BYTEH = Product_Version;
-                   CANARegs.BAT80VConfing = 0x0118;
-                   CANATX(0x600,8,CANARegs.SwVerProducttype.all,Product_Voltage,Product_Capacity,CANARegs.BAT80VConfing);
+                 //  CANARegs.SwVerProducttype.byte.BYTEL = Product_Type;
+                 //  CANARegs.SwVerProducttype.byte.BYTEH = Product_Version;
+                   CANARegs.SwVerProducttype = ComBine(Product_Version,Product_Type); 
+                   CANARegs.BAT80VConfing    = ComBine(Product_SysCellVauleP,Product_SysCellVauleS);   
+                   CANATX(0x600,8,CANARegs.SwVerProducttype,Product_Voltage,Product_Capacity,CANARegs.BAT80VConfing);
                }
 
        break;
