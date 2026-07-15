@@ -235,7 +235,9 @@ void main(void)
         switch(SysRegs.SysMachine)
         { 
             case System_STATE_INIT:
-                 SysRegs.BAT80VStateReg.bit.SysSTATE = 0;
+                 //SysRegs.BAT80VStateReg.bit.SysSTATE = 0;
+                 CANARegs.BAT80VStatus.bit.BATStatus=0;
+
                  SysTimerINIT(&SysRegs);
                  SysVarINIT(&SysRegs);
                  CANRegVarINIT(&CANARegs);
@@ -296,7 +298,6 @@ void main(void)
                  SysRegs.BalanceModeCount=0;
                  SysRegs.BalanceTimeCount=0;
                  Farasis56AhSocRegs.state=SOC_STATE_IDLE;
-                
                  SysRegs.BAT80VFaulBuftReg.all=0;
                  /*
                   * CELL VOLTAGE measurement
@@ -453,15 +454,35 @@ void main(void)
                  /*----------------------------------------
                   * 5. 상태 전이
                   *----------------------------------------*/
+                 if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
+                 {
+                    CANARegs.BAT80VStatus.bit.BATStatus=3;
+                 }
+                 if(SysRegs.BAT80VStateReg.bit.SysFault==1)
+                 {
+                    CANARegs.BAT80VStatus.bit.BATStatus=4;
+                 }
                  SysRegs.SysMachine=System_STATE_STANDBY;
-
             break;
             case System_STATE_STANDBY:
+                  /*--------------------------------------------------------------
+                   * 260715 : STANDBY는 부팅 초기화 완료 후 대기 상태 → Init(0) 오보고 수정
+                   *--------------------------------------------------------------*/
+                  //CANARegs.BAT80VStatus.bit.BATStatus=0;
+                  CANARegs.BAT80VStatus.bit.BATStatus=1;   // TODO : [검증] 260715_Note2, 0.12 STANDBY 구간 Ready(1) 보고
+                  if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
+                  {
+                    CANARegs.BAT80VStatus.bit.BATStatus=3;
+                  }
+                  if(SysRegs.BAT80VStateReg.bit.SysFault==1)
+                  {
+                    CANARegs.BAT80VStatus.bit.BATStatus=4;
+                  }
                   SysRegs.BAT80VStateReg.bit.SysSTATE = 1;
                   SysRegs.BAT80VStateReg.bit.CANCOMEnable=0;
                   SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=0;
                   SysRegs.BAT80VDigitalOutPutReg.bit.LEDFaultOUT=0;
-                  SysRegs.BAT80VStateReg.bit.SysSTATE = 1;
+                
                   /*
                    * SChange the state machine to System_STATE_READY
                    */
@@ -471,7 +492,6 @@ void main(void)
                   SysRegs.BAT80VFaultReg.bit.CellIR_OV=0;
                   SysRegs.BAT80VFaultReg.bit.PackOcTime_Err =0;
                   SysRegs.BAT80VFaultReg.bit.PrtcOcEvent_Err =0;
-                  CANATX(0x600,8,CANARegs.SwVerProducttype.all,Product_Voltage,Product_Capacity,CANARegs.BAT80VConfing);
                   SysRegs.BAT80VStateReg.bit.CANCOMEnable=1;
                   SysRegs.BAT80VStateReg.bit.INITOK=1;
                   NVRAllRegs.SEQ=NVRAM_AZoneSave;
@@ -479,18 +499,27 @@ void main(void)
                   Farasis56AhSocRegs.state= SOC_STATE_RUNNING;
             break;
             case System_STATE_READY:
+                 CANARegs.BAT80VStatus.bit.BATStatus=1;
+                 if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
+                 {
+                    CANARegs.BAT80VStatus.bit.BATStatus=3;
+                 }
+                 if(SysRegs.BAT80VStateReg.bit.SysFault==1)
+                 {
+                    CANARegs.BAT80VStatus.bit.BATStatus=4;
+                 }
                  SysRegs.BAT80VStateReg.bit.CANCOMEnable=1;
                  SysRegs.BAT80VStateReg.bit.INITOK=1;
                  SysRegs.BAT80VStateReg.bit.SysSTATE = 1;
                  SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=0;
                  if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
                  {
-                     SysRegs.BAT80VStateReg.bit.SysSTATE = 3;
+                   //  SysRegs.BAT80VStateReg.bit.SysSTATE = 3;
                      SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=1;
                  }
                  if(SysRegs.BAT80VStateReg.bit.SysFault==1)
                  {
-                     SysRegs.BAT80VStateReg.bit.SysSTATE = 4;
+                  //   SysRegs.BAT80VStateReg.bit.SysSTATE = 4;
                      SysRegs.SysMachine=System_STATE_PROTECTER;
                  }
                  if(CANARegs.PMSCMDRegs.bit.RUNStatus==1)
@@ -507,18 +536,21 @@ void main(void)
                  //ProtecLatchRelayHandle(&PrtectRelayRegs);
             break;
             case System_STATE_RUNING:
-                 SysRegs.BAT80VStateReg.bit.SysSTATE = 2;
-                 SysRegs.BAT80VStateReg.bit.CANCOMEnable=1;
-                 SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=0;
-                 if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
-                 {
-                     SysRegs.BAT80VStateReg.bit.SysSTATE = 3;
-                     SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=1;
-                 }
-
-                 /*
-                  *
-                  */
+                  SysRegs.BAT80VStateReg.bit.CANCOMEnable=1;
+                  CANARegs.BAT80VStatus.bit.BATStatus=2;
+                  if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
+                  {
+                    CANARegs.BAT80VStatus.bit.BATStatus=3;
+                    SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=1;
+                  }
+                  else 
+                  {
+                    SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=0;   
+                  }
+                  if(SysRegs.BAT80VStateReg.bit.SysFault==1)
+                  {
+                    CANARegs.BAT80VStatus.bit.BATStatus=4;
+                  }
                  if(CANARegs.PMSCMDRegs.bit.RUNStatus==0)
                  {
                      PrtectRelayRegs.State.bit.WakeUpEN=0;
@@ -531,8 +563,7 @@ void main(void)
                  }
             break;
             case System_STATE_PROTECTER:
-                 SysRegs.BAT80VStateReg.bit.SysSTATE =4;
-                 SysRegs.BAT12VStateReg.bit.SysSTATE =4;
+                 CANARegs.BAT80VStatus.bit.BATStatus=4;
                  if(SysRegs.BAT80VStateReg.bit.SysFault==1)
                  {
                      ProtectRelayHandle(&PrtectRelayRegs);
@@ -546,7 +577,7 @@ void main(void)
                      SysRegs.BAT80VFaultReg.all=0;
                      SysRegs.BAT80VStateReg.bit.SysFault=0;
                      PrtectRelayRegs.State.all=0;
-                     ProtectRelayVarINIT(&PrtectRelayRegs); // TODOS : 26.06.30 Fault 이후에 FCU(VCU)에서 리셋 이후에 릴레이 시퀀스 개선 
+                     ProtectRelayVarINIT(&PrtectRelayRegs); // TODOS : 26.06.30 Fault 이후에 FCU(VCU)에서 리셋 이후에 릴레이 시퀀스 개선
                      delay_ms(200);
                      SysRegs.SysMachine=System_STATE_READY;
                  }
@@ -554,18 +585,15 @@ void main(void)
                  SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=0;
                  SysRegs.BAT80VDigitalOutPutReg.bit.LEDFaultOUT=1;
             break;
-            case System_STATE_DATALOG:
+            case System_STATE_NvrInit:
                  SysRegs.BAT80VStateReg.bit.CANCOMEnable=1;
             break;
-            case System_STATE_ProtectHistory:
+            case System_STATE_History:
 
             break;
-            case System_STATE_MANUALMode:
-
+            case System_STATE_Manual:
             break;
-            case System_STATE_CLEAR:
 
-            break;
             default :
             break;
         }
@@ -826,17 +854,13 @@ interrupt void cpu_timer0_isr(void)
            SysRegs.BAT80VStateReg.bit.SysFault=1;
 
        }
-       else
-       {
-        //   CANARegs.BAT80VFaultCT =0;
-       }
    }
    else
    {
        SysRegs.BAT80VStateReg.bit.SysAalarm=0;
        SysRegs.BAT80VStateReg.bit.SysFault=0;
    }
-  if(CANARegs.PMSCMDRegs.bit.PrtctReset==1)
+   if(CANARegs.PMSCMDRegs.bit.PrtctReset==1)
    {
        CANARegs.PMSCMDRegs.bit.PrtctReset=0;
        SysRegs.BAT80VFaultReg.all=0;
@@ -848,7 +872,6 @@ interrupt void cpu_timer0_isr(void)
        delay_ms(50);
        SysRegs.SysMachine=System_STATE_READY;
    }
-
    switch(SysRegs.SysRegTimer5msecCount)
    {
        case 1:
@@ -856,7 +879,6 @@ interrupt void cpu_timer0_isr(void)
        break;
        default :
        break;
-
    }
    switch(SysRegs.SysRegTimer10msecCount)
    {
@@ -902,15 +924,8 @@ interrupt void cpu_timer0_isr(void)
                    CANATX(0x602,8,CANARegs.BAT80VStatus.all,CANARegs.BAT80VDigitalOutPutReg.all,CANARegs.BAT80VAh,SysRegs.BAT80VStateReg.all);
                }
                */
-               if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
-               {
-                  SysRegs.BAT80VStateReg.bit.SysSTATE=3;
-               }
-               if(SysRegs.BAT80VStateReg.bit.SysFault==1)
-               {
-                  SysRegs.BAT80VStateReg.bit.SysSTATE=4;
-               }
-               CANARegs.BAT80VStatus.bit.BATStatus           = SysRegs.BAT80VStateReg.bit.SysSTATE;
+
+               SysRegs.BAT80VStateReg.bit.SysSTATE           = Slave1Regs.StateMachine;
                CANARegs.BAT80VDigitalOutPutReg.bit.NRlyOUT   = PrtectRelayRegs.State.bit.NRelayDO;
                CANARegs.BAT80VDigitalOutPutReg.bit.CHARlyOUT = PrtectRelayRegs.State.bit.PreRelayDO;
                CANARegs.BAT80VDigitalOutPutReg.bit.PRlyOUT   = PrtectRelayRegs.State.bit.PRelayDO;
@@ -1006,7 +1021,6 @@ interrupt void cpu_timer0_isr(void)
        case 17:
                 if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                 {
-
                     CANARegs.BAT80VTemperaturelMAX    = (int)(SysRegs.Bat80VCellMaxTemperatureF*10);
                     CANARegs.BAT80VTemperaturelMIN    = (int)(SysRegs.Bat80VCellMinTemperatureF*10);
                     CANARegs.BAT80VTemperatureAVG     = (int)(SysRegs.Bat80VCellAgvTemperatureF*10);
@@ -1053,22 +1067,36 @@ interrupt void cpu_timer0_isr(void)
        case 30:
                if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                {
-                   CANARegs.CellIRTxA = (CANARegs.CellIRTxNum+0<24) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellIRTxNum+0] : 0;
-                   CANARegs.CellIRTxB = (CANARegs.CellIRTxNum+0<24) ? CANARegs.BAT80VoltageCell[CANARegs.CellIRTxNum+0] : 0;
-                   CANARegs.CellIRTxC = (CANARegs.CellIRTxNum+0<24) ? CANARegs.BAT80VoltageCell[CANARegs.CellIRTxNum+0] : 0;
-                 //  CANATX(0x609,8,CANARegs.CellIRTxNum,CANARegs.CellIRTxA ,CANARegs.CellIRTxB, CANARegs.CellIRTxC );
-                   if(CANARegs.CellIRTxNum>=24)
+                   /*--------------------------------------------------------------
+                    * 260715 : 0x609 셀전압 송신 버그 수정 (22셀 순환 전송)
+                    *   - 읽기 인덱스가 온도용 CellIRTxNum 공유 → 전용 CellVoltTxNum 사용
+                    *   - 인덱스 증가(+=3) 누락 보완, 리셋 변수 CellIRTxNum → CellVoltTxNum
+                    *--------------------------------------------------------------*/
+                   //CANARegs.CellVoltTxA = CANARegs.BAT80VoltageCell[CANARegs.CellIRTxNum+0];
+                   //CANARegs.CellVoltTxB = CANARegs.BAT80VoltageCell[CANARegs.CellIRTxNum+1];
+                   //CANARegs.CellVoltTxC = CANARegs.BAT80VoltageCell[CANARegs.CellIRTxNum+2];
+
+                   CANARegs.CellVoltTxA = (CANARegs.CellVoltTxNum+0<22) ? CANARegs.BAT80VoltageCell[CANARegs.CellVoltTxNum+0] : 0;   // TODO : [검증] 260715_Note1, 0.11 22셀 전압 0x609 송신
+                   CANARegs.CellVoltTxB = (CANARegs.CellVoltTxNum+1<22) ? CANARegs.BAT80VoltageCell[CANARegs.CellVoltTxNum+1] : 0;
+                   CANARegs.CellVoltTxC = (CANARegs.CellVoltTxNum+2<22) ? CANARegs.BAT80VoltageCell[CANARegs.CellVoltTxNum+2] : 0;
+                   CANATX(0x609,8,CANARegs.CellVoltTxNum,CANARegs.CellVoltTxA ,CANARegs.CellVoltTxB, CANARegs.CellVoltTxC );
+                   CANARegs.CellVoltTxNum +=3;
+                   if(CANARegs.CellVoltTxNum>=22)
                    {
-                       CANARegs.CellIRTxNum =0;
+                       CANARegs.CellVoltTxNum =0;
                    }
                }
        break;
        case 35:
-                 SysRegs.NumA=SysRegs.MainIsr1/300;
-                 SysRegs.NumB=(float32)(SysRegs.NumA*0.1);
-                 if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
-                 {
-                 }
+                 /*--------------------------------------------------------------
+                  * 260715 : case 35 미사용 코드 정리 (NumB write-only, 빈 if 블록)
+                  *   검증 후 제거 예정
+                  *--------------------------------------------------------------*/
+                 //SysRegs.NumA=SysRegs.MainIsr1/300;                // TODO : [삭제] 260715_Note1, 0.11 NumB 미참조 dead
+                 //SysRegs.NumB=(float32)(SysRegs.NumA*0.1);
+                 //if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
+                 //{
+                 //}
        break;
        case 38:
                if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
@@ -1087,14 +1115,14 @@ interrupt void cpu_timer0_isr(void)
                 if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                 {
 
-                    CANARegs.CellIRTxA = (CANARegs.CellIRTxNum+0<24) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellIRTxNum+0] : 0;
-                    CANARegs.CellIRTxB = (CANARegs.CellIRTxNum+1<24) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellIRTxNum+1] : 0;
-                    CANARegs.CellIRTxC = (CANARegs.CellIRTxNum+2<24) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellIRTxNum+2] : 0;
-                  //  CANATX(0x60A,8,CANARegs.CellIRTxNum,CANARegs.CellIRTxA ,CANARegs.CellIRTxB, 0);
-                    CANARegs.CellIRTxNum +=3;
-                    if(CANARegs.CellIRTxNum>=24)
+                    CANARegs.CellTempsTxA = (CANARegs.CellTempsTxNum+0<22) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellTempsTxNum+0] : 0;
+                    CANARegs.CellTempsTxB = (CANARegs.CellTempsTxNum+1<22) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellTempsTxNum+1] : 0;
+                    CANARegs.CellTempsTxC = (CANARegs.CellTempsTxNum+2<22) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellTempsTxNum+2] : 0;
+                    CANATX(0x60A,8,CANARegs.CellTempsTxNum,CANARegs.CellTempsTxA ,CANARegs.CellTempsTxB, CANARegs.CellTempsTxC);
+                    CANARegs.CellTempsTxNum +=3;
+                    if(CANARegs.CellTempsTxNum>=22)
                     {
-                        CANARegs.CellIRTxNum =0;
+                        CANARegs.CellTempsTxNum =0;
                     }
                 }
        break;
@@ -1152,9 +1180,9 @@ interrupt void cpu_timer0_isr(void)
                {
                  //  CANARegs.SwVerProducttype.byte.BYTEL = Product_Type;
                  //  CANARegs.SwVerProducttype.byte.BYTEH = Product_Version;
-                   CANARegs.SwVerProducttype = ComBine(Product_Version,Product_Type); 
+                   CANARegs.SWTypeVer        = ComBine(Product_Version,Product_Type); 
                    CANARegs.BAT80VConfing    = ComBine(Product_SysCellVauleP,Product_SysCellVauleS);   
-                   CANATX(0x600,8,CANARegs.SwVerProducttype,Product_Voltage,Product_Capacity,CANARegs.BAT80VConfing);
+                   CANATX(0x600,8,CANARegs.SwVertype,Product_Voltage,Product_Capacity,CANARegs.BAT80VConfing);
                }
 
        break;
@@ -1269,6 +1297,7 @@ void PWRHoldHandle(SystemReg *s)
     {
         /* VCU RUN 명령 → 전원 유지 */
         PWRHOLD_ON;
+        CANARegs.BAT80VDigitalOutPutReg.bit.PWRHoldOUT = 1u;
         PwrOffDelayCount = 0u;
     }
     else
@@ -1284,12 +1313,14 @@ void PWRHoldHandle(SystemReg *s)
             else
             {
                 PWRHOLD_OFF;
+                CANARegs.BAT80VDigitalOutPutReg.bit.PWRHoldOUT = 0; 
             }
         }
         else
         {
             /* VCU 통신 정상 → BMS 전원 ON 판단, 전원 유지 (SOC는 전류적산 + NVRAM) */
             PWRHOLD_ON;
+            CANARegs.BAT80VDigitalOutPutReg.bit.PWRHoldOUT = 1u;
             PwrOffDelayCount = 0u;
         }
     }

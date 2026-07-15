@@ -112,10 +112,11 @@ typedef enum
    System_STATE_READY,
    System_STATE_RUNING,
    System_STATE_PROTECTER,
-   System_STATE_DATALOG,
-   System_STATE_ProtectHistory,
-   System_STATE_MANUALMode,
-   System_STATE_CLEAR
+   /* 260715 : 상태 enum 이름 정리 (값 순서·번호 유지) */
+   System_STATE_NvrInit,        // TODO : [검증] 260715_Note1, 0.11 (구 System_STATE_DATALOG, 값5)
+   System_STATE_History,        // (구 System_STATE_ProtectHistory, 값6)
+   System_STATE_Manual,         // (구 System_STATE_MANUALMode, 값7)
+   //System_STATE_CLEAR         // [삭제] 미사용 상태 제거 (구 값8)
 } SysState;
 struct ParentDeviceCMD_BIT
 {
