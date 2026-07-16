@@ -588,6 +588,7 @@ typedef struct CANA_DATA
     Uint16 CellTemperatureNum;
     Uint16 BAT80VTempCell[24];
     Uint16 BAT80VConfing;
+    
     /*
      *
      */

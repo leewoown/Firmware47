@@ -454,6 +454,7 @@ void main(void)
                  /*----------------------------------------
                   * 5. 상태 전이
                   *----------------------------------------*/
+                 CANARegs.BAT80VStatus.bit.BATStatus=0;
                  if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
                  {
                     CANARegs.BAT80VStatus.bit.BATStatus=3;
@@ -469,7 +470,7 @@ void main(void)
                    * 260715 : STANDBY는 부팅 초기화 완료 후 대기 상태 → Init(0) 오보고 수정
                    *--------------------------------------------------------------*/
                   //CANARegs.BAT80VStatus.bit.BATStatus=0;
-                  CANARegs.BAT80VStatus.bit.BATStatus=1;   // TODO : [검증] 260715_Note2, 0.12 STANDBY 구간 Ready(1) 보고
+                  CANARegs.BAT80VStatus.bit.BATStatus=1;   // TODO : [검증] 260715_Note1, 0.12 STANDBY 구간 Ready(1) 보고
                   if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
                   {
                     CANARegs.BAT80VStatus.bit.BATStatus=3;
@@ -499,28 +500,24 @@ void main(void)
                   Farasis56AhSocRegs.state= SOC_STATE_RUNNING;
             break;
             case System_STATE_READY:
-                 CANARegs.BAT80VStatus.bit.BATStatus=1;
-                 if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
-                 {
-                    CANARegs.BAT80VStatus.bit.BATStatus=3;
-                 }
-                 if(SysRegs.BAT80VStateReg.bit.SysFault==1)
-                 {
-                    CANARegs.BAT80VStatus.bit.BATStatus=4;
-                 }
                  SysRegs.BAT80VStateReg.bit.CANCOMEnable=1;
                  SysRegs.BAT80VStateReg.bit.INITOK=1;
                  SysRegs.BAT80VStateReg.bit.SysSTATE = 1;
                  SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=0;
+                 CANARegs.BAT80VStatus.bit.BATStatus=1;
                  if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
                  {
-                   //  SysRegs.BAT80VStateReg.bit.SysSTATE = 3;
-                     SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=1;
+                    CANARegs.BAT80VStatus.bit.BATStatus=3;
+                    SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=1;
+                 }
+                 else 
+                 {
+                    SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=0;   
                  }
                  if(SysRegs.BAT80VStateReg.bit.SysFault==1)
                  {
-                  //   SysRegs.BAT80VStateReg.bit.SysSTATE = 4;
-                     SysRegs.SysMachine=System_STATE_PROTECTER;
+                    CANARegs.BAT80VStatus.bit.BATStatus=4;
+                    SysRegs.SysMachine=System_STATE_PROTECTER;
                  }
                  if(CANARegs.PMSCMDRegs.bit.RUNStatus==1)
                  {
@@ -533,7 +530,6 @@ void main(void)
                      ProtectRelayWakeUpHandle(&PrtectRelayRegs);
                      SysRegs.SysMachine=System_STATE_RUNING;
                  }
-                 //ProtecLatchRelayHandle(&PrtectRelayRegs);
             break;
             case System_STATE_RUNING:
                   SysRegs.BAT80VStateReg.bit.CANCOMEnable=1;
@@ -550,16 +546,13 @@ void main(void)
                   if(SysRegs.BAT80VStateReg.bit.SysFault==1)
                   {
                     CANARegs.BAT80VStatus.bit.BATStatus=4;
+                    SysRegs.SysMachine=System_STATE_PROTECTER;
                   }
                  if(CANARegs.PMSCMDRegs.bit.RUNStatus==0)
                  {
                      PrtectRelayRegs.State.bit.WakeUpEN=0;
                      ProtectRelayWakeUpHandle(&PrtectRelayRegs);
                      SysRegs.SysMachine=System_STATE_READY;
-                 }
-                 if(SysRegs.BAT80VStateReg.bit.SysFault==1)
-                 {
-                     SysRegs.SysMachine=System_STATE_PROTECTER;
                  }
             break;
             case System_STATE_PROTECTER:
@@ -903,7 +896,8 @@ interrupt void cpu_timer0_isr(void)
                }
        break;
        case 5:
-             /*  if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
+               /*  
+               if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                {
 
                    if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
@@ -924,7 +918,14 @@ interrupt void cpu_timer0_isr(void)
                    CANATX(0x602,8,CANARegs.BAT80VStatus.all,CANARegs.BAT80VDigitalOutPutReg.all,CANARegs.BAT80VAh,SysRegs.BAT80VStateReg.all);
                }
                */
-
+                if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
+                {
+                    CANARegs.BAT80VStatus.bit.BATStatus=3;
+                }
+                if(SysRegs.BAT80VStateReg.bit.SysFault==1)
+                {
+                    CANARegs.BAT80VStatus.bit.BATStatus=4;
+                }
                SysRegs.BAT80VStateReg.bit.SysSTATE           = Slave1Regs.StateMachine;
                CANARegs.BAT80VDigitalOutPutReg.bit.NRlyOUT   = PrtectRelayRegs.State.bit.NRelayDO;
                CANARegs.BAT80VDigitalOutPutReg.bit.CHARlyOUT = PrtectRelayRegs.State.bit.PreRelayDO;
@@ -977,13 +978,22 @@ interrupt void cpu_timer0_isr(void)
    {
        case 5:
                 //At 80MHZ, operation time is 0.151msec
+                /*--------------------------------------------------------------
+                 * 260715 : 통신 복구 시 통신알람 자동 해제(auto-clear) 추가.
+                 *          기존은 PackCAN_ERR이 latch되어 VCU 통신 복구돼도
+                 *          재부팅(SysVarINIT) 전까지 알람이 유지되던 문제
+                 *--------------------------------------------------------------*/
                 SysRegs.SysCanRxCount++;
                 if(SysRegs.SysCanRxCount>=10)
                 {
-                    CANARegs.PMSCMDRegs.bit.RUNStatus=0;
+                    //CANARegs.PMSCMDRegs.bit.RUNStatus=0;       // TODO : [검증] 260715_Note1, 0.12 PackCAN_ERR 발생해도 RUN 유지(파워릴레이 유지)
                     SysRegs.BAT80VAlarmReg.bit.PackCAN_ERR=1;
                     SysRegs.SysCanRxCount=11000;
-                 }
+                }
+                else
+                {
+                    SysRegs.BAT80VAlarmReg.bit.PackCAN_ERR=0;   // TODO : [검증] 260715_Note1, 0.12 수신워치독<10(통신정상)이면 통신알람 해제
+                }
        break;
        case 8:
                 //At 80MHZ, operation time is 0.151msec
@@ -1182,7 +1192,7 @@ interrupt void cpu_timer0_isr(void)
                  //  CANARegs.SwVerProducttype.byte.BYTEH = Product_Version;
                    CANARegs.SWTypeVer        = ComBine(Product_Version,Product_Type); 
                    CANARegs.BAT80VConfing    = ComBine(Product_SysCellVauleP,Product_SysCellVauleS);   
-                   CANATX(0x600,8,CANARegs.SwVertype,Product_Voltage,Product_Capacity,CANARegs.BAT80VConfing);
+                   CANATX(0x600,8,CANARegs.SWTypeVer,Product_Voltage,Product_Capacity,CANARegs.BAT80VConfing);
                }
 
        break;

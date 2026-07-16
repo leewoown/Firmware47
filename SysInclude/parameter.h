@@ -292,7 +292,7 @@ Parameter
 #define     Product_SysCellVauleS              22
 #define     Product_SysCellVauleP              1
 #define     Product_Voltage                    768  // 3.664*22
-#define     Product_Capacity                   400  //
+#define     Product_Capacity                   450  //
 #define     Product_Type                       0    // TODOS 26.07.02 TEST 버전0, 양상버전 1 
 #define     Product_Version                    12   // TODOS 26.07.02 TEST 버전 관리
 #define     Bat80VSysVoltMax                 924 //4.2*22
@@ -409,7 +409,12 @@ Parameter
 #define     C_CellVoltUN_Warn                              3.00   //26.05.30기준 WrnCellUv 3.0V
 #define     C_CellVoltUN_WarnRst                           3.015  //26.05.30기준 release 3.015V
 #define     C_CellVoltDIV_Warn                             0.2    //26.05.30기준 WrnCellUnbalV 200mV
-#define     C_CellVoltDIV_WarnRst                          0.02   //26.05.30기준 release 20mV
+/*--------------------------------------------------------------
+ * 260716 : 셀 편차 알람 해제 임계값 상향 (20mV로는 정상 편차에서
+ *          해제가 안 돼 알람이 latch됨 → 히스테리시스 밴드 축소)
+ *--------------------------------------------------------------*/
+//#define     C_CellVoltDIV_WarnRst                          0.02   //26.05.30기준 release 20mV
+#define     C_CellVoltDIV_WarnRst                          0.1    // TODO : [튜닝] 260716_Note1, 0.12 셀전압편차 알람 해제 100mV (기존 20mV→100mV)
 #define     C_CellTempOV_Warn                              55.0   //26.05.30기준 WrnCellOt 55도
 #define     C_CellTempOV_WarnRst                           52.25  //26.05.30기준 release 52.25도
 #define     C_CellTempUN_Warn                             -20.0   //26.05.30기준 WrnCellUt -20도

@@ -193,8 +193,14 @@ void SysVarINIT(SystemReg *s)
     s->TempInitCount=0;
 
     memset(&s->Bat80VAlarmCont[0],0.0,32);
-    memset(&s->Bat80VCellVoltageF[0],0.0,Sys80VCellVoltCount);
-    memset(&s->Bat80VCellTemperatureF[0],0.0,Sys80VCellTempCount);
+    /*--------------------------------------------------------------
+     * 260716 : float 배열 memset 크기 오류 수정. C28x는 sizeof(float32)==2 word라
+     *          원소개수(22)를 크기로 주면 절반(11개)만 지워짐 → sizeof(배열)로 전체 클리어
+     *--------------------------------------------------------------*/
+    //memset(&s->Bat80VCellVoltageF[0],0.0,Sys80VCellVoltCount);
+    //memset(&s->Bat80VCellTemperatureF[0],0.0,Sys80VCellTempCount);
+    memset(&s->Bat80VCellVoltageF[0],0,sizeof(s->Bat80VCellVoltageF));           // TODO : [검증] 260716_Note1, 0.12 셀전압 배열 전체 클리어(44word)
+    memset(&s->Bat80VCellTemperatureF[0],0,sizeof(s->Bat80VCellTemperatureF));   // TODO : [검증] 260716_Note1, 0.12 셀온도 배열 전체 클리어(44word)
 }
 void CANRegVarINIT(CANAReg *P)
 {
@@ -211,7 +217,7 @@ void CANRegVarINIT(CANAReg *P)
     P->CellVoltageNum=0;
     P->PMSCMDRegs.all=0;
     P->BAT80VDigitalOutPutReg.all=0;
-    P->SwVerProducttype.all=0;
+  //  P->SwVerProducttype.all=0;
     P->BatConfParallelSerial.all=0;
     memset(&P->BAT80VoltageCell[0],0,24);
     P->CellNumTStart=0;
