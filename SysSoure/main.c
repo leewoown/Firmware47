@@ -519,7 +519,11 @@ void main(void)
                     CANARegs.BAT80VStatus.bit.BATStatus=4;
                     SysRegs.SysMachine=System_STATE_PROTECTER;
                  }
-                 if(CANARegs.PMSCMDRegs.bit.RUNStatus==1)
+                 if((CANARegs.PMSCMDRegs.bit.RUNStatus==1)&&(CANARegs.PMSCMDRegs.bit.PrtctReset==1))
+                 {
+                     PrtectRelayRegs.State.bit.WakeUpEN=0;
+                 }
+                 if((CANARegs.PMSCMDRegs.bit.RUNStatus==1)&&(CANARegs.PMSCMDRegs.bit.PrtctReset==0))
                  {
                      PrtectRelayRegs.State.bit.WakeUpEN=1;
                      if(SysRegs.BAT80VStateReg.bit.SysFault==1)
@@ -564,7 +568,7 @@ void main(void)
                  }
                  if(CANARegs.PMSCMDRegs.bit.PrtctReset==1) //TODO : PrtctReset은 Res
                  {
-                     CANARegs.PMSCMDRegs.bit.PrtctReset=0;
+                   //  CANARegs.PMSCMDRegs.bit.PrtctReset=0;
                      SysRegs.BAT80VFaultReg.all=0;
                      SysRegs.BAT80VFaulBuftReg.all=0;
                      SysRegs.BAT80VFaultReg.all=0;
@@ -572,7 +576,7 @@ void main(void)
                      PrtectRelayRegs.State.all=0;
                      ProtectRelayVarINIT(&PrtectRelayRegs); // TODOS : 26.06.30 Fault 이후에 FCU(VCU)에서 리셋 이후에 릴레이 시퀀스 개선
                      delay_ms(200);
-                     SysRegs.SysMachine=System_STATE_READY;
+                     SysRegs.SysMachine=System_STATE_INIT;
                  }
                  SysRegs.BAT80VStateReg.bit.CANCOMEnable=1;
                  SysRegs.BAT80VDigitalOutPutReg.bit.LEDAlarmOUT=0;
@@ -790,6 +794,7 @@ void main(void)
 
 interrupt void cpu_timer0_isr(void)
 {
+   static Uint16 PrtctResetOld = 0;   // TODO : [검증] 260722_Note1, 0.13 PrtctReset edge 검출용 이전값
    SysRegs.MainIsr1++;
    NVRAllRegs.SEQTimeTick++;
    SysRegs.SysRegTimer5msecCount++;
@@ -853,9 +858,27 @@ interrupt void cpu_timer0_isr(void)
        SysRegs.BAT80VStateReg.bit.SysAalarm=0;
        SysRegs.BAT80VStateReg.bit.SysFault=0;
    }
-   if(CANARegs.PMSCMDRegs.bit.PrtctReset==1)
+   /*--------------------------------------------------------------
+    * 260722 : PrtctReset self-clear(=0)가 READY 가드·WakeUp 가드를 무력화 →
+    *          VCU가 PrtctReset을 홀드해도 INIT→RUNNING 반복되어 릴레이 토글.
+    *          rising edge(0→1)에서만 리셋 1회 실행, self-clear 제거로 플래그 유지.
+    *--------------------------------------------------------------*/
+   //if(CANARegs.PMSCMDRegs.bit.PrtctReset==1)
+   //{
+   //    CANARegs.PMSCMDRegs.bit.PrtctReset=0;
+   //    SysRegs.BAT80VFaultReg.all=0;
+   //    SysRegs.BAT80VFaulBuftReg.all=0;
+   //    SysRegs.BAT80VFaultReg.all=0;
+   //    SysRegs.BAT80VStateReg.bit.SysFault=0;
+   //    PrtectRelayRegs.State.all=0;          // WakeUpState/WakeUpEN/ProtectRelayCyle 리셋
+   //    ProtectRelayVarINIT(&PrtectRelayRegs);
+   //    delay_ms(50);
+   //    SysRegs.SysMachine=System_STATE_INIT;
+   //}
+   if((CANARegs.PMSCMDRegs.bit.PrtctReset==1)&&(PrtctResetOld==0))   // TODO : [검증] 260722_Note1, 0.13 PrtctReset 0→1 edge에서만 리셋(self-clear 제거)
    {
-       CANARegs.PMSCMDRegs.bit.PrtctReset=0;
+       PrtectRelayRegs.State.bit.WakeUpEN=0;                 // TODO : [검증] 260722_Note1, 0.13 릴레이 ON 중이면 OFF 시퀀스 태우려 WakeUpEN=0
+       ProtectRelayWakeUpHandle(&PrtectRelayRegs);           // TODO : [검증] 260722_Note1, 0.13 WakeUpState==1이면 컨택터 물리 OFF(NRlyOff→250ms→PRlyOff)
        SysRegs.BAT80VFaultReg.all=0;
        SysRegs.BAT80VFaulBuftReg.all=0;
        SysRegs.BAT80VFaultReg.all=0;
@@ -863,8 +886,9 @@ interrupt void cpu_timer0_isr(void)
        PrtectRelayRegs.State.all=0;          // WakeUpState/WakeUpEN/ProtectRelayCyle 리셋
        ProtectRelayVarINIT(&PrtectRelayRegs);
        delay_ms(50);
-       SysRegs.SysMachine=System_STATE_READY;
+       SysRegs.SysMachine=System_STATE_INIT;
    }
+   PrtctResetOld = CANARegs.PMSCMDRegs.bit.PrtctReset;   // TODO : [검증] 260722_Note1, 0.13 edge 검출용 이전값 갱신(매 틱)
    switch(SysRegs.SysRegTimer5msecCount)
    {
        case 1:

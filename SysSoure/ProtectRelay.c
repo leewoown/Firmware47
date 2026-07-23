@@ -15,6 +15,7 @@ extern void ProtectOffHandle(PrtectRelayReg *p);
 extern void ProtectRelayWakeUpHandle(PrtectRelayReg *p);
 //extern void ProtecLatchRelayHandle(PrtectRelayReg *p);   // TODO(미사용 - 검증 후 제거 예정)
 extern void Bat80V_FanControlHandle(PrtectRelayReg *p);
+extern CANAReg CANARegs;                                    // main.c 정의, PrtctReset 상태 참조용
 void ProtectRelayVarINIT(PrtectRelayReg *p)
 {
     p->State.all=0;
@@ -118,8 +119,14 @@ void ProtectOffHandle(PrtectRelayReg *p)
 
 void ProtectRelayWakeUpHandle(PrtectRelayReg *p)
 {
+    /*--------------------------------------------------------------
+     * 260722 : 함수 상단 가드가 OFF 분기까지 막아 PrtctReset 중 컨택터 개방 불가.
+     *          가드를 ON(WakeUpEN==1) 분기 안으로 이동 → 웨이크업만 차단, OFF는 허용.
+     *--------------------------------------------------------------*/
+    //if(CANARegs.PMSCMDRegs.bit.PrtctReset==1) return;   // TODO : [검증] 260715_Note1, 0.12 PrtctReset 중 릴레이 웨이크업 절대 차단
     if(p->State.bit.WakeUpEN==1)
     {
+        if(CANARegs.PMSCMDRegs.bit.PrtctReset==1) return;   // TODO : [검증] 260722_Note1, 0.13 PrtctReset 중 웨이크업(ON)만 차단, OFF는 허용
         if(p->State.bit.WakeUpState==0)
         {
 
