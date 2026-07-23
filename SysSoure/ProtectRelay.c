@@ -138,9 +138,10 @@ void ProtectRelayWakeUpHandle(PrtectRelayReg *p)
             delay_ms(200);
             PRlyOn;
             p->State.bit.PRelayDO =1;
-            delay_ms(10);
+            delay_ms(100);                  // TODOS : [검증] 260723_Note1,0.14 PRelay=1-> PreRelayDO=0 Delay 10msec -> 100msec 변경
             CHARlyOff;
             p->State.bit.PreRelayDO=0;
+            PRlyOff;
             p->State.bit.WakeUpState=1;
         }
     }
@@ -151,7 +152,6 @@ void ProtectRelayWakeUpHandle(PrtectRelayReg *p)
             NRlyOff;
             p->State.bit.NRelayDO=1;
             delay_ms(250);
-            PRlyOff;
             p->State.bit.PRelayDO=0;
             p->State.bit.WakeUpState=0;
         }
