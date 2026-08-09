@@ -49,6 +49,7 @@
 #define DSP28_ECANA          1
 #include "F2806x_Device.h"     // F2806x Headerfile Include File
 #include "F2806x_Examples.h"   // F2806x Examples Include File
+#include "DSP28x_Project.h"    // TODOS 260726_Note1, 0.14 parameter.h 연결(DebugBoardMode 참조)
 
 extern struct ECAN_REGS ECanaShadow;
 //
@@ -155,7 +156,7 @@ void InitECana(void)
            ECanaMboxes.MBOX10.MSGID.all    = 0;
            ECanaMboxes.MBOX11.MSGID.all    = 0;
            ECanaMboxes.MBOX12.MSGID.all    = 0;
-           ECanaMboxes.MBOX23.MSGID.all    = 0;
+           ECanaMboxes.MBOX13.MSGID.all    = 0;   // TODOS 260726_Note1, 0.14 MBOX13 초기화 누락 수정(MBOX23 중복 오타)
            ECanaMboxes.MBOX14.MSGID.all    = 0;
            ECanaMboxes.MBOX15.MSGID.all    = 0;
            ECanaMboxes.MBOX16.MSGID.all    = 0;
@@ -209,6 +210,20 @@ void InitECana(void)
            ECanaMboxes.MBOX29.MSGID.bit.STDMSGID = 0x01E;
            ECanaMboxes.MBOX31.MSGID.bit.STDMSGID = 0x01F;
 
+#if DebugBoardMode != 0
+           ECanaMboxes.MBOX4.MSGID.bit.STDMSGID  = 0x401;   // TODOS 260726_Note1, 0.14 모사장치 셀전압 01~04
+           ECanaMboxes.MBOX5.MSGID.bit.STDMSGID  = 0x402;   // TODOS 260726_Note1, 0.14 모사장치 셀전압 05~08
+           ECanaMboxes.MBOX6.MSGID.bit.STDMSGID  = 0x403;   // TODOS 260726_Note1, 0.14 모사장치 셀전압 09~12
+           ECanaMboxes.MBOX7.MSGID.bit.STDMSGID  = 0x404;   // TODOS 260726_Note1, 0.14 모사장치 셀전압 13~16
+           ECanaMboxes.MBOX8.MSGID.bit.STDMSGID  = 0x405;   // TODOS 260726_Note1, 0.14 모사장치 셀전압 17~20
+           ECanaMboxes.MBOX9.MSGID.bit.STDMSGID  = 0x406;   // TODOS 260726_Note1, 0.14 모사장치 셀전압 21~22
+           ECanaMboxes.MBOX10.MSGID.bit.STDMSGID = 0x407;   // TODOS 260726_Note1, 0.14 모사장치 셀온도 01~04
+           ECanaMboxes.MBOX11.MSGID.bit.STDMSGID = 0x408;   // TODOS 260726_Note1, 0.14 모사장치 셀온도 05~08
+           ECanaMboxes.MBOX12.MSGID.bit.STDMSGID = 0x409;   // TODOS 260726_Note1, 0.14 모사장치 셀온도 09~12
+           ECanaMboxes.MBOX13.MSGID.bit.STDMSGID = 0x40A;   // TODOS 260726_Note1, 0.14 모사장치 셀온도 13~16
+           ECanaMboxes.MBOX14.MSGID.bit.STDMSGID = 0x40B;   // TODOS 260726_Note1, 0.14 모사장치 셀온도 17~20
+           ECanaMboxes.MBOX15.MSGID.bit.STDMSGID = 0x40C;   // TODOS 260726_Note1, 0.14 모사장치 셀온도 21~22
+#endif
 
        /* Configure bit timing parameters for eCANA*/
 
@@ -345,6 +360,20 @@ void InitECana(void)
            ECanaShadow.CANMD.bit.MD29=0;
            ECanaShadow.CANMD.bit.MD30=0;
            ECanaShadow.CANMD.bit.MD31=0;
+#if DebugBoardMode != 0
+           ECanaShadow.CANMD.bit.MD4=1;    // TODOS 260726_Note1, 0.14 모사장치 수신 RX 지정 (0x401~0x40C)
+           ECanaShadow.CANMD.bit.MD5=1;
+           ECanaShadow.CANMD.bit.MD6=1;
+           ECanaShadow.CANMD.bit.MD7=1;
+           ECanaShadow.CANMD.bit.MD8=1;
+           ECanaShadow.CANMD.bit.MD9=1;
+           ECanaShadow.CANMD.bit.MD10=1;
+           ECanaShadow.CANMD.bit.MD11=1;
+           ECanaShadow.CANMD.bit.MD12=1;
+           ECanaShadow.CANMD.bit.MD13=1;
+           ECanaShadow.CANMD.bit.MD14=1;
+           ECanaShadow.CANMD.bit.MD15=1;
+#endif
            ECanaRegs.CANMD.all = ECanaShadow.CANMD.all;
 
            // 해당 MailBox를 CAN Enable 시킴
@@ -382,6 +411,20 @@ void InitECana(void)
            ECanaShadow.CANME.bit.ME29= 0;
            ECanaShadow.CANME.bit.ME30= 0;
            ECanaShadow.CANME.bit.ME31= 1;
+#if DebugBoardMode != 0
+           ECanaShadow.CANME.bit.ME4= 1;   // TODOS 260726_Note1, 0.14 모사장치 메일박스 활성 (MBOX4~15)
+           ECanaShadow.CANME.bit.ME5= 1;
+           ECanaShadow.CANME.bit.ME6= 1;
+           ECanaShadow.CANME.bit.ME7= 1;
+           ECanaShadow.CANME.bit.ME8= 1;
+           ECanaShadow.CANME.bit.ME9= 1;
+           ECanaShadow.CANME.bit.ME10= 1;
+           ECanaShadow.CANME.bit.ME11= 1;
+           ECanaShadow.CANME.bit.ME12= 1;
+           ECanaShadow.CANME.bit.ME13= 1;
+           ECanaShadow.CANME.bit.ME14= 1;
+           ECanaShadow.CANME.bit.ME15= 1;
+#endif
            ECanaRegs.CANME.all = ECanaShadow.CANME.all;
 
 
@@ -427,6 +470,21 @@ void InitECana(void)
            ECanaShadow.CANMIM.bit.MIM29 = 0;
            ECanaShadow.CANMIM.bit.MIM30 = 0;
            //ECanaShadow.CANMIM.bit.MIM31 = 1;
+
+#if DebugBoardMode != 0
+           ECanaShadow.CANMIM.bit.MIM4 = 1;    // TODOS 260726_Note1, 0.14 모사장치 메일박스 RX 인터럽트 허용
+           ECanaShadow.CANMIM.bit.MIM5 = 1;
+           ECanaShadow.CANMIM.bit.MIM6 = 1;
+           ECanaShadow.CANMIM.bit.MIM7 = 1;
+           ECanaShadow.CANMIM.bit.MIM8 = 1;
+           ECanaShadow.CANMIM.bit.MIM9 = 1;
+           ECanaShadow.CANMIM.bit.MIM10 = 1;
+           ECanaShadow.CANMIM.bit.MIM11 = 1;
+           ECanaShadow.CANMIM.bit.MIM12 = 1;
+           ECanaShadow.CANMIM.bit.MIM13 = 1;
+           ECanaShadow.CANMIM.bit.MIM14 = 1;
+           ECanaShadow.CANMIM.bit.MIM15 = 1;
+#endif
 
            ECanaRegs.CANMIM.all   = ECanaShadow.CANMIM.all;
 

@@ -6,6 +6,19 @@
 #include "math.h"
 #include <string.h>
 
+#define A 1664525
+#define C 1013904223
+#define M 4294967296 // 2^32
+
+
+extern CANAReg         CANARegs;           // TODOS 260726_Note1, 0.14 PWRHoldHandle 이동에 따른 참조(main.c 정의)
+//extern SystemReg       SysRegs;
+#if DebugBoardMode != 0
+extern DbgReg          DbgRegs;   // TODOS 260726_Note1, 0.14 모사장치 수신버퍼(main.c 정의) 참조
+#endif
+
+
+
 extern void SysTimerINIT(SystemReg *s);
 extern void CANRegVarINIT(CANAReg *P);
 extern void SysVarINIT(SystemReg *s);
@@ -19,11 +32,7 @@ extern void Cal80VSysFaultCheck(SystemReg *s);
 extern void Cal80VSysAlarmtCheck(SystemReg *s);
 extern int float32ToInt(float32 Vaule, Uint32 Num);
 extern void TempTemps(SystemReg *s);
-//extern SystemReg       SysRegs;
-
-#define A 1664525
-#define C 1013904223
-#define M 4294967296 // 2^32
+extern void PWRHoldHandle(SystemReg *s);   // TODOS 260726_Note1, 0.14 main.c에서 이동
 
 
 void TempTemps(SystemReg *s)
@@ -201,6 +210,16 @@ void SysVarINIT(SystemReg *s)
     //memset(&s->Bat80VCellTemperatureF[0],0.0,Sys80VCellTempCount);
     memset(&s->Bat80VCellVoltageF[0],0,sizeof(s->Bat80VCellVoltageF));           // TODO : [검증] 260716_Note1, 0.12 셀전압 배열 전체 클리어(44word)
     memset(&s->Bat80VCellTemperatureF[0],0,sizeof(s->Bat80VCellTemperatureF));   // TODO : [검증] 260716_Note1, 0.12 셀온도 배열 전체 클리어(44word)
+#if DebugBoardMode != 0
+    memset(&DbgRegs.CellVolt[0],0,sizeof(DbgRegs.CellVolt));                     // TODOS 260726_Note1, 0.14 모사장치 셀전압 raw 클리어(22word)
+    memset(&DbgRegs.CellTemp[0],0,sizeof(DbgRegs.CellTemp));                     // TODOS 260726_Note1, 0.14 모사장치 셀온도 raw 클리어(22word)
+    memset(&DbgRegs.CellVoltF[0],0,sizeof(DbgRegs.CellVoltF));                   // TODOS 260726_Note1, 0.14 모사장치 셀전압 버퍼 클리어(44word)
+    memset(&DbgRegs.CellTempF[0],0,sizeof(DbgRegs.CellTempF));                   // TODOS 260726_Note1, 0.14 모사장치 셀온도 버퍼 클리어(44word)
+    DbgRegs.VoltFlag.all=0;                                                      // TODOS 260726_Note1, 0.14 전압 프레임 수신표시 클리어
+    DbgRegs.TempFlag.all=0;                                                      // TODOS 260726_Note1, 0.14 온도 프레임 수신표시 클리어
+    DbgRegs.VoltCnt=0;                                                           // TODOS 260726_Note1, 0.14 전압 수신 카운터 클리어
+    DbgRegs.TempCnt=0;                                                           // TODOS 260726_Note1, 0.14 온도 수신 카운터 클리어
+#endif
 }
 void CANRegVarINIT(CANAReg *P)
 {
@@ -418,19 +437,19 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
           if(s->Bat80VAlarmCont[1]< C_PackSOCOV_WarnDelay){++s->Bat80VAlarmCont[1];}
           if(s->Bat80VAlarmCont[1]>=C_PackSOCOV_WarnDelay)
           {
-              s->BAT80VAlarmReg.bit.PackVSOC_OV=1;
+              s->BAT80VAlarmReg.bit.PackSOC_OV=1;
           }
       }
       else
       {
-          if(s->BAT80VAlarmReg.bit.PackVSOC_OV==0)
+          if(s->BAT80VAlarmReg.bit.PackSOC_OV==0)
           {
               s->Bat80VAlarmCont[1]=0;
           }
           if(Hyst_Off(s->Bat80VSOCF,C_PackSOCOV_WarnRst))
           {
               s->Bat80VAlarmCont[1]=0;
-              s->BAT80VAlarmReg.bit.PackVSOC_OV=0;
+              s->BAT80VAlarmReg.bit.PackSOC_OV=0;
           }
       }
       // 팩 저충전,유지시간카운터배열값:2,유지시간;100msec
@@ -439,19 +458,19 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
           if(s->Bat80VAlarmCont[2]< C_PackSOCUN_WarnDelay){++s->Bat80VAlarmCont[2];}
           if(s->Bat80VAlarmCont[2]>=C_PackSOCUN_WarnDelay)
           {
-              s->BAT80VAlarmReg.bit.PackVSOC_UN=1;
+              s->BAT80VAlarmReg.bit.PackSOC_UN=1;
           }
       }
       else
       {
-          if(s->BAT80VAlarmReg.bit.PackVSOC_UN==0)
+          if(s->BAT80VAlarmReg.bit.PackSOC_UN==0)
           {
               s->Bat80VAlarmCont[2]=0;
           }
           if(Hyst_On(s->Bat80VSOCF,C_PackSOCUN_WarnRst))
           {
               s->Bat80VAlarmCont[2]=0;
-              s->BAT80VAlarmReg.bit.PackVSOC_UN=0;
+              s->BAT80VAlarmReg.bit.PackSOC_UN=0;
           }
       }
       // 팩 과전압 Alarm,유지시간카운터배열값:3,유지시간;100msec
@@ -706,26 +725,24 @@ void Cal80VSysFaultCheck(SystemReg *s)
       if(s->Bat80VCurrentAsbF >= C_Bat80VOVPackCurrentFault)
       {
           s->BAPackOCCount++;
-          s-> BAT80VFaulBuftReg.bit.PackVCT_OV=1;
+          s-> BAT80VFaulBuftReg.bit.PackOC=1;
           if(s->BAPackOCCount >= C_PackCTOV_FaultDelay)
           {
-              s-> BAT80VFaultReg.bit.PackVCT_OV=1;
+              s-> BAT80VFaultReg.bit.PackOC=1;
               s->BAPackOCCount=C_PackCTOV_FaultDelay+10;
           }
       }
       else
       {
           s->BAPackOCCount=0;
-         // s-> BAT80VFaultReg.bit.PackVCT_OV=0;
-          s-> BAT80VFaulBuftReg.bit.PackVCT_OV=0;
+         // s-> BAT80VFaultReg.bit.PackOC=0;
+          s-> BAT80VFaulBuftReg.bit.PackOC=0;
       }
       */
-
-
       if(s->Bat80VCurrentAsbF >= C_PackCTOV_Fault)
       {
-          s-> BAT80VFaulBuftReg.bit.PackVCT_OV=1;
-          s-> BAT80VFaultReg.bit.PackVCT_OV=1;
+          s-> BAT80VFaulBuftReg.bit.PackOC=1;
+          s-> BAT80VFaultReg.bit.PackOC=1;
           s-> Bat80VFaultCurrentF=s->Bat80VCurrentF;
       }
       if(s->Bat80VCurrentAsbF >= C_PackOCTimer_Fault)
@@ -735,8 +752,10 @@ void Cal80VSysFaultCheck(SystemReg *s)
           if(s->BAPackOCCount>=C_PackOCTimerCount)
           {
               s->BAPackOCCount=30000;
-              s-> BAT80VFaultReg.bit.PackOcTime_Err =1;
-            //  s-> BAT80VFaultReg.bit.PrtcOcEvent_Err =0;
+              /*--------------------------------------------------------------
+               * 260807 : PackOcTime_Err FAULT 기능 VER15 미반영 (set 비활성)
+               *--------------------------------------------------------------*/
+              //s-> BAT80VFaultReg.bit.PackOcTime_Err =1;   // TODO : [검증] 260807_Note1, 0.15 과전류 시간보호 VER15 미반영
           }
       }
       else
@@ -748,15 +767,15 @@ void Cal80VSysFaultCheck(SystemReg *s)
       if(s->Bat80VSOCF >=C_PackSOCOV_Fault)
       {
 
-          s->BAT80VFaulBuftReg.bit.PackVSOC_OV =1;
-          s->BAT80VFaultReg.bit.PackVSOC_OV=1;
+          s->BAT80VFaulBuftReg.bit.PackSOC_OV =1;
+          s->BAT80VFaultReg.bit.PackSOC_OV=1;
 
       }
       // 저충전 FAULT
       if(s->Bat80VSOCF <= C_PackSOCUN_Fault)
       {
-          s->BAT80VFaulBuftReg.bit.PackVSOC_UN =1;
-          s->BAT80VFaultReg.bit.PackVSOC_UN =1;
+          s->BAT80VFaulBuftReg.bit.PackSOC_UN =1;
+          s->BAT80VFaultReg.bit.PackSOC_UN =1;
       }
       // 팩 과전압 FAULT
       if(s->Bat80VVoltageF >= C_PackVoltOV_Fault)
@@ -1057,4 +1076,60 @@ void ProtectRelayTimerHandle(TimerReg *timer)
     break;
 
   }
+}
+/*========================================
+ * PWRHoldHandle : BMS 전원 유지(PWRHOLD, GPIO21) 제어
+ *   ※ 1ms ISR 주기 호출 전제 (C_PwrHoldOffDelayCount = 1ms×300000 = 5분)
+ *
+ *   - RUNStatus == 1 : VCU RUN 명령 → 전원 유지 (PWRHOLD_ON)
+ *   - RUNStatus == 0 : RUN 종료 → VCU 통신 상태로 분기
+ *       · 통신 끊김  : 원 OFF 판단 → 5분전 유지 후 PWRHOLD_OFF (대기 중 CAN 통신은 유지)
+ *       · 통신 정상  : BMS 전원 ON 판단 → PWRHOLD_ON (SOC는 전류적산 + NVRAM으로만 계속)
+ *
+ *   VCU 통신 상태는 수신 워치독(s->SysCanRxCount)으로 판정:
+ *     VCU 수신 시 ISR에서 0 리셋, 100ms마다 증가. C_VcuCommLostCount 이상이면 끊김.
+ *
+ *   TODO(검증 필요): 실기 검증 전 신규 로직. 검증 항목 —
+ *     (1) ISR 주기 1ms 여부(CpuTimer0 PRD=80400), (2) GPIO21 극성(High=전원유지),
+ *     (3) VCU 미연결 시 ~5분 후 자동 PWRHOLD_OFF 동작, (4) 통신 복구 시 카운트 리셋.
+ *     검증 완료 후 본 TODO 제거.
+ *========================================*/
+void PWRHoldHandle(SystemReg *s)           // TODOS 260726_Note1, 0.14 main.c에서 DSP28x_Project.c로 이동
+{
+    static Uint32 PwrOffDelayCount = 0u;
+    Uint16 VcuCommLost;
+
+    VcuCommLost = (s->SysCanRxCount >= C_VcuCommLostCount) ? 1u : 0u;
+
+    if(CANARegs.PMSCMDRegs.bit.RUNStatus == 1u)
+    {
+        /* VCU RUN 명령 → 전원 유지 */
+        PWRHOLD_ON;
+        CANARegs.BAT80VDigitalOutPutReg.bit.PWRHoldOUT = 1u;
+        PwrOffDelayCount = 0u;
+    }
+    else
+    {
+        /* RUNStatus == 0 : RUN 종료 */
+        if(VcuCommLost == 1u)
+        {
+            /* VCU 통신 끊김 → 전원 OFF 판단. 5분 유지 후 PWRHOLD_OFF */
+            if(PwrOffDelayCount < C_PwrHoldOffDelayCount)
+            {
+                PwrOffDelayCount++;
+            }
+            else
+            {
+                PWRHOLD_OFF;
+                CANARegs.BAT80VDigitalOutPutReg.bit.PWRHoldOUT = 0;
+            }
+        }
+        else
+        {
+            /* VCU 통신 정상 → BMS 전원 ON 판단, 전원 유지 (SOC는 전류적산 + NVRAM) */
+            PWRHOLD_ON;
+            CANARegs.BAT80VDigitalOutPutReg.bit.PWRHoldOUT = 1u;
+            PwrOffDelayCount = 0u;
+        }
+    }
 }

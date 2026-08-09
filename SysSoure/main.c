@@ -127,10 +127,14 @@ NVRAllReg       NVRAllRegs;
 NVRZoneAReg     NVRZoneAWRRegs;
 NVRZoneAReg     NVRZoneARDRegs;
 NVRZoneAReg     NVRZoneAInitRegs;
-
-
 CANAReg         CANARegs;
 SocReg          Farasis56AhSocRegs;
+
+#if DebugBoardMode != 0
+DbgReg          DbgRegs;          // TODOS 260726_Note1, 0.14 모사장치 셀전압·온도 CAN 수신 버퍼
+#endif
+
+
 
 //SocReg          Farasis40AhSocRegs;
 //SocReg          Frey60AhSocRegs;
@@ -226,7 +230,7 @@ void main(void)
     {
 
         SysRegs.Maincount++;
-        /* 부팅 초기화 완료(INITOK=1) 후에는 VCU 통신 끊김(PackCAN_ERR) 여부와
+        /* 부팅 초기화 완료(INITOK=1) 후에는 VCU 통신 끊김(PackFcu_CANErr) 여부와
          * 무관하게 CAN 송신을 항상 활성 유지 */
         if(SysRegs.BAT80VStateReg.bit.INITOK==1)
         {
@@ -292,16 +296,19 @@ void main(void)
                       memset(&Slave2Regs.CellVoltage[0],3250,12);
                       memset(&Slave2Regs.CellTemperature[0],200,12);
                       Slave2Regs.StateMachine = STATE_BATSTANDBY;
-                  }
+                 }
                  SysRegs.BAT80VStateReg.bit.CANCOMEnable=0;
                  SysRegs.BAT80VStateReg.bit.BalanceMode=0;
                  SysRegs.BalanceModeCount=0;
                  SysRegs.BalanceTimeCount=0;
                  Farasis56AhSocRegs.state=SOC_STATE_IDLE;
                  SysRegs.BAT80VFaulBuftReg.all=0;
+                 
                  /*
                   * CELL VOLTAGE measurement
                   */
+#if DebugBoardMode == 0
+                 /* TODOS 260726_Note1, 0.14 디버깅모드는 isoSPI 취득 생략 — CAN(0x401~0x406) 수신값 사용 */
                  for(SysRegs.InitValuleCnt=0;SysRegs.InitValuleCnt<5;SysRegs.InitValuleCnt++)
                  {
                      Slave1Regs.StateMachine = STATE_BATREAD;
@@ -318,25 +325,87 @@ void main(void)
                  }
                  memcpy(&SysRegs.Bat80VCellVoltageF[0],     &Slave1Regs.CellVoltageF[0],sizeof(float32)*11);
                  memcpy(&SysRegs.Bat80VCellVoltageF[11],    &Slave2Regs.CellVoltageF[0],sizeof(float32)*11);
+#endif
+#if DebugBoardMode != 0
+                while(DbgRegs.VoltFlag.all != 0x003F)
+                {
+                    /* wait for all cell voltage frames (0x401~0x406) */
+                }
+                DbgRegs.CellVoltF[0]  = (float32)(DbgRegs.CellVolt[0]*0.001);    // TODOS 260726_Note1, 0.14 셀 01 mV to V
+                DbgRegs.CellVoltF[1]  = (float32)(DbgRegs.CellVolt[1]*0.001);    // TODOS 260726_Note1, 0.14 셀 02 mV to V
+                DbgRegs.CellVoltF[2]  = (float32)(DbgRegs.CellVolt[2]*0.001);    // TODOS 260726_Note1, 0.14 셀 03 mV to V
+                DbgRegs.CellVoltF[3]  = (float32)(DbgRegs.CellVolt[3]*0.001);    // TODOS 260726_Note1, 0.14 셀 04 mV to V
+                DbgRegs.CellVoltF[4]  = (float32)(DbgRegs.CellVolt[4]*0.001);    // TODOS 260726_Note1, 0.14 셀 05 mV to V
+                DbgRegs.CellVoltF[5]  = (float32)(DbgRegs.CellVolt[5]*0.001);    // TODOS 260726_Note1, 0.14 셀 06 mV to V
+                DbgRegs.CellVoltF[6]  = (float32)(DbgRegs.CellVolt[6]*0.001);    // TODOS 260726_Note1, 0.14 셀 07 mV to V
+                DbgRegs.CellVoltF[7]  = (float32)(DbgRegs.CellVolt[7]*0.001);    // TODOS 260726_Note1, 0.14 셀 08 mV to V
+                DbgRegs.CellVoltF[8]  = (float32)(DbgRegs.CellVolt[8]*0.001);    // TODOS 260726_Note1, 0.14 셀 09 mV to V
+                DbgRegs.CellVoltF[9]  = (float32)(DbgRegs.CellVolt[9]*0.001);    // TODOS 260726_Note1, 0.14 셀 10 mV to V
+                DbgRegs.CellVoltF[10] = (float32)(DbgRegs.CellVolt[10]*0.001);   // TODOS 260726_Note1, 0.14 셀 11 mV to V
+                DbgRegs.CellVoltF[11] = (float32)(DbgRegs.CellVolt[11]*0.001);   // TODOS 260726_Note1, 0.14 셀 12 mV to V
+                DbgRegs.CellVoltF[12] = (float32)(DbgRegs.CellVolt[12]*0.001);   // TODOS 260726_Note1, 0.14 셀 13 mV to V
+                DbgRegs.CellVoltF[13] = (float32)(DbgRegs.CellVolt[13]*0.001);   // TODOS 260726_Note1, 0.14 셀 14 mV to V
+                DbgRegs.CellVoltF[14] = (float32)(DbgRegs.CellVolt[14]*0.001);   // TODOS 260726_Note1, 0.14 셀 15 mV to V
+                DbgRegs.CellVoltF[15] = (float32)(DbgRegs.CellVolt[15]*0.001);   // TODOS 260726_Note1, 0.14 셀 16 mV to V
+                DbgRegs.CellVoltF[16] = (float32)(DbgRegs.CellVolt[16]*0.001);   // TODOS 260726_Note1, 0.14 셀 17 mV to V
+                DbgRegs.CellVoltF[17] = (float32)(DbgRegs.CellVolt[17]*0.001);   // TODOS 260726_Note1, 0.14 셀 18 mV to V
+                DbgRegs.CellVoltF[18] = (float32)(DbgRegs.CellVolt[18]*0.001);   // TODOS 260726_Note1, 0.14 셀 19 mV to V
+                DbgRegs.CellVoltF[19] = (float32)(DbgRegs.CellVolt[19]*0.001);   // TODOS 260726_Note1, 0.14 셀 20 mV to V
+                DbgRegs.CellVoltF[20] = (float32)(DbgRegs.CellVolt[20]*0.001);   // TODOS 260726_Note1, 0.14 셀 21 mV to V
+                DbgRegs.CellVoltF[21] = (float32)(DbgRegs.CellVolt[21]*0.001);   // TODOS 260726_Note1, 0.14 셀 22 mV to V
+                memcpy(&SysRegs.Bat80VCellVoltageF[0],    &DbgRegs.CellVoltF[0],sizeof(float32)*22);
+#endif
                  Cal80VSysVoltageHandle(&SysRegs);
                  /*
                   * CELL temperature measurement
                   */
+#if DebugBoardMode == 0
                  for(SysRegs.TempInitCount=0;SysRegs.TempInitCount<50;SysRegs.TempInitCount++)
                  {
                      Slave1Regs.ID=BMS_ID_1;
                      Slave1Regs.BATICDO.bit.GPIO1=1;
                      SlaveBMSDigiteldoutOHandler(&Slave1Regs);
-                     SalveTempsHandler(&Slave1Regs);
+                     SalveTempsHandler(&Slave1Regs);                       // TODOS 260726_Note1, 0.14 디버깅모드는 CAN(0x407~0x40C) 수신으로 대체
                     // delay_ms(1);
                      Slave2Regs.ID=BMS_ID_2;
                      Slave2Regs.BATICDO.bit.GPIO1=1;
                      SlaveBMSDigiteldoutOHandler(&Slave2Regs);
-                     SalveTempsHandler(&Slave2Regs);
+
+                     SalveTempsHandler(&Slave2Regs);                       // TODOS 260726_Note1, 0.14 디버깅모드는 CAN(0x407~0x40C) 수신으로 대체
                    //  delay_ms(1);
                  }
                  memcpy(&SysRegs.Bat80VCellTemperatureF[0],     &Slave1Regs.CellTemperatureF[0],sizeof(float32)*11);
                  memcpy(&SysRegs.Bat80VCellTemperatureF[11],    &Slave2Regs.CellTemperatureF[0],sizeof(float32)*11);
+#endif
+#if DebugBoardMode != 0
+                while(DbgRegs.TempFlag.all != 0x003F)
+                {
+                    /* wait for all cell temperature frames (0x407~0x40C) */
+                }
+                DbgRegs.CellTempF[0]=(float32)(DbgRegs.CellTemp[0]*0.1);   // TODOS 260726_Note1, 0.14 셀 01 0.1℃ to ℃
+                DbgRegs.CellTempF[1]=(float32)(DbgRegs.CellTemp[1]*0.1);   // TODOS 260726_Note1, 0.14 셀 02 0.1℃ to ℃
+                DbgRegs.CellTempF[2]=(float32)(DbgRegs.CellTemp[2]*0.1);   // TODOS 260726_Note1, 0.14 셀 03 0.1℃ to ℃
+                DbgRegs.CellTempF[3]=(float32)(DbgRegs.CellTemp[3]*0.1);   // TODOS 260726_Note1, 0.14 셀 04 0.1℃ to ℃
+                DbgRegs.CellTempF[4]=(float32)(DbgRegs.CellTemp[4]*0.1);   // TODOS 260726_Note1, 0.14 셀 05 0.1℃ to ℃
+                DbgRegs.CellTempF[5]=(float32)(DbgRegs.CellTemp[5]*0.1);   // TODOS 260726_Note1, 0.14 셀 06 0.1℃ to ℃
+                DbgRegs.CellTempF[6]=(float32)(DbgRegs.CellTemp[6]*0.1);   // TODOS 260726_Note1, 0.14 셀 07 0.1℃ to ℃
+                DbgRegs.CellTempF[7]=(float32)(DbgRegs.CellTemp[7]*0.1);   // TODOS 260726_Note1, 0.14 셀 08 0.1℃ to ℃
+                DbgRegs.CellTempF[8]=(float32)(DbgRegs.CellTemp[8]*0.1);   // TODOS 260726_Note1, 0.14 셀 09 0.1℃ to ℃
+                DbgRegs.CellTempF[9]=(float32)(DbgRegs.CellTemp[9]*0.1);   // TODOS 260726_Note1, 0.14 셀 10 0.1℃ to ℃
+                DbgRegs.CellTempF[10]=(float32)(DbgRegs.CellTemp[10]*0.1); // TODOS 260726_Note1, 0.14 셀 11 0.1℃ to ℃
+                DbgRegs.CellTempF[11]=(float32)(DbgRegs.CellTemp[11]*0.1); // TODOS 260726_Note1, 0.14 셀 12 0.1℃ to ℃
+                DbgRegs.CellTempF[12]=(float32)(DbgRegs.CellTemp[12]*0.1); // TODOS 260726_Note1, 0.14 셀 13 0.1℃ to ℃
+                DbgRegs.CellTempF[13]=(float32)(DbgRegs.CellTemp[13]*0.1); // TODOS 260726_Note1, 0.14 셀 14 0.1℃ to ℃
+                DbgRegs.CellTempF[14]=(float32)(DbgRegs.CellTemp[14]*0.1); // TODOS 260726_Note1, 0.14 셀 15 0.1℃ to ℃
+                DbgRegs.CellTempF[15]=(float32)(DbgRegs.CellTemp[15]*0.1); // TODOS 260726_Note1, 0.14 셀 16 0.1℃ to ℃
+                DbgRegs.CellTempF[16]=(float32)(DbgRegs.CellTemp[16]*0.1); // TODOS 260726_Note1, 0.14 셀 17 0.1℃ to ℃
+                DbgRegs.CellTempF[17]=(float32)(DbgRegs.CellTemp[17]*0.1); // TODOS 260726_Note1, 0.14 셀 18 0.1℃ to ℃
+                DbgRegs.CellTempF[18]=(float32)(DbgRegs.CellTemp[18]*0.1); // TODOS 260726_Note1, 0.14 셀 19 0.1℃ to ℃
+                DbgRegs.CellTempF[19]=(float32)(DbgRegs.CellTemp[19]*0.1); // TODOS 260726_Note1, 0.14 셀 20 0.1℃ to ℃
+                DbgRegs.CellTempF[20]=(float32)(DbgRegs.CellTemp[20]*0.1); // TODOS 260726_Note1, 0.14 셀 21 0.1℃ to ℃
+                DbgRegs.CellTempF[21]=(float32)(DbgRegs.CellTemp[21]*0.1); // TODOS 260726_Note1, 0.14 셀 22 0.1℃ to ℃
+                memcpy(&SysRegs.Bat80VCellTemperatureF[0],     &DbgRegs.CellTempF[0],sizeof(float32)*22);
+#endif
                  Cal80VSysTemperatureHandle(&SysRegs);
 
                  /*
@@ -354,7 +423,6 @@ void main(void)
                   *----------------------------------------*/
                  NVRAM_AZoneReadHandler(&NVRZoneARDRegs);
                  Farasis56AhSocRegs.NVRSocInitF = (float32)NVRZoneARDRegs.LastSOC / 10.0F;
-
                  /* NVR TODO: 한글 주석 복구 필요(원본 인코딩 손상) */
                 //  if(Farasis56AhSocRegs.NVRSocInitF > 100.0F)
                 //  {
@@ -645,19 +713,20 @@ void main(void)
               //  SlaveBmsBalance(&Slave3Regs);
 
                 Slave1Regs.ID=BMS_ID_1;
-                SlaveVoltagHandler(&Slave1Regs);
+#if DebugBoardMode == 0
+                SlaveVoltagHandler(&Slave1Regs);                           // TODOS 260726_Note1, 0.14 디버깅모드는 CAN(0x401~0x406) 수신으로 대체
                 delay_ms(1);
-
                 Slave2Regs.ID=BMS_ID_2;
-                SlaveVoltagHandler(&Slave2Regs);
+                SlaveVoltagHandler(&Slave2Regs);                           // TODOS 260726_Note1, 0.14 디버깅모드는 CAN(0x401~0x406) 수신으로 대체
+#endif
                 delay_ms(1);
-
              //   Slave1Regs.BatICTempsF = Slave1Temps;
             //    SalveTempsVoltHandler_B(&Slave1Regs);
                 delay_ms(1);
             }
             if(SysRegs.BAT80VStateReg.bit.BalanceStatStop==1)
             {
+#if DebugBoardMode == 0
                 Slave1Regs.ID=BMS_ID_1;
                 Slave1Regs.SysCellMinVoltage = SysRegs.Bat80VCellMinVoltageF;
                 SlaveVoltagBalaHandler(&Slave1Regs);
@@ -667,6 +736,7 @@ void main(void)
                 Slave2Regs.SysCellMinVoltage = SysRegs.Bat80VCellMinVoltageF;
                 SlaveVoltagBalaHandler(&Slave2Regs);
                 SlaveBmsBalance(&Slave2Regs);
+#endif  
             }
 
             SysRegs.CellVoltsampling=0;
@@ -674,23 +744,24 @@ void main(void)
         }
         if(SysRegs.CellTempssampling>50)
         {
+#if DebugBoardMode == 0
             Slave1Regs.ID=BMS_ID_1;
             Slave1Regs.BATICDO.bit.GPIO1=1;
             SlaveBMSDigiteldoutOHandler(&Slave1Regs);
             delay_ms(5);
-            SalveTempsHandler(&Slave1Regs);
+            SalveTempsHandler(&Slave1Regs);                                // TODOS 260726_Note1, 0.14 디버깅모드는 CAN(0x407~0x40C) 수신으로 대체
             delay_ms(1);
-
             Slave2Regs.ID=BMS_ID_2;
             Slave2Regs.BATICDO.bit.GPIO1=1;
             SlaveBMSDigiteldoutOHandler(&Slave2Regs);
             delay_ms(5);
-            SalveTempsHandler(&Slave2Regs);
+            SalveTempsHandler(&Slave2Regs);                                // TODOS 260726_Note1, 0.14 디버깅모드는 CAN(0x407~0x40C) 수신으로 대체
+
             delay_ms(1);
             SysRegs.CellTempssampling=0;
-
            Slave1Regs.BatICTempsF = Slave1Temps;
            LTC6804_DieTemperatureRead(BMS_ID_1, &Slave1Temps);
+#endif
         }
         if((NVRAllRegs.SEQTimeTick>100)&&(SysRegs.BAT80VStateReg.bit.INITOK==1))
         {
@@ -845,12 +916,10 @@ interrupt void cpu_timer0_isr(void)
        {
            SysRegs.BAT80VStateReg.bit.SysAalarm=0;
        }
-      // Cal80VSysFaultCheck(&SysRegs);
+       Cal80VSysFaultCheck(&SysRegs);
        if(SysRegs.BAT80VFaultReg.all != 0)
        {
-          // CANARegs.BAT80VFaultCT = (int)(SysRegs.Bat80VFaultCurrentF*10);
            SysRegs.BAT80VStateReg.bit.SysFault=1;
-
        }
    }
    else
@@ -942,6 +1011,7 @@ interrupt void cpu_timer0_isr(void)
                    CANATX(0x602,8,CANARegs.BAT80VStatus.all,CANARegs.BAT80VDigitalOutPutReg.all,CANARegs.BAT80VAh,SysRegs.BAT80VStateReg.all);
                }
                */
+                
                 if(SysRegs.BAT80VStateReg.bit.SysAalarm==1)
                 {
                     CANARegs.BAT80VStatus.bit.BATStatus=3;
@@ -950,14 +1020,18 @@ interrupt void cpu_timer0_isr(void)
                 {
                     CANARegs.BAT80VStatus.bit.BATStatus=4;
                 }
-               SysRegs.BAT80VStateReg.bit.SysSTATE           = Slave1Regs.StateMachine;
+               //SysRegs.BAT80VStateReg.bit.SysSTATE           = Slave1Regs.StateMachine;
+               CANARegs.BAT80VStatus.bit.BalanceEN           = SysRegs.BAT80VStateReg.bit.BalanceMode;
                CANARegs.BAT80VDigitalOutPutReg.bit.NRlyOUT   = PrtectRelayRegs.State.bit.NRelayDO;
                CANARegs.BAT80VDigitalOutPutReg.bit.CHARlyOUT = PrtectRelayRegs.State.bit.PreRelayDO;
                CANARegs.BAT80VDigitalOutPutReg.bit.PRlyOUT   = PrtectRelayRegs.State.bit.PRelayDO;
-               CANARegs.BAT80VStatus.bit.BalanceEN           = SysRegs.BAT80VStateReg.bit.BalanceMode;
-               SysRegs.BAT80VStateReg.bit.SocMode            = Farasis56AhSocRegs.SoCStateRegs.bit.CalMeth;
                CANARegs.BAT80VAh                             = (int)(Farasis56AhSocRegs.SysAhF*10);
-               CANATX(0x602,8,CANARegs.BAT80VStatus.all,CANARegs.BAT80VDigitalOutPutReg.all,SysRegs.BAT80VStateReg.all,0X000);
+               SysRegs.BAT80VStateReg.bit.SocMode            = Farasis56AhSocRegs.SoCStateRegs.bit.CalMeth;
+               SysRegs.BAT80VStateReg.bit.SysSTATE           = SysRegs.SysMachine;   // TODO : [검증] 2606.088_Note1, 0.15 상태머신 보고(Init/Ready/Running/Protecter)
+               if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
+               {
+                 CANATX(0x602,8,CANARegs.BAT80VStatus.all,CANARegs.BAT80VDigitalOutPutReg.all,CANARegs.BAT80VAh,SysRegs.BAT80VStateReg.all);
+               } 
        default :
        break;
    }
@@ -966,8 +1040,36 @@ interrupt void cpu_timer0_isr(void)
        case 1:
               //LEDSysState_H;
               //At 80MHZ, operation time is 1.29usec
+              #if DebugBoardMode == 0
               memcpy(&SysRegs.Bat80VCellVoltageF[0],     &Slave1Regs.CellVoltageF[0],sizeof(float32)*11);
               memcpy(&SysRegs.Bat80VCellVoltageF[11],    &Slave2Regs.CellVoltageF[0],sizeof(float32)*11);
+              #endif 
+              #if DebugBoardMode != 0
+
+              DbgRegs.CellVoltF[0]  = (float32)(DbgRegs.CellVolt[0]*0.001);    // TODOS 260726_Note1, 0.14 셀 01 mV to V
+              DbgRegs.CellVoltF[1]  = (float32)(DbgRegs.CellVolt[1]*0.001);    // TODOS 260726_Note1, 0.14 셀 02 mV to V
+              DbgRegs.CellVoltF[2]  = (float32)(DbgRegs.CellVolt[2]*0.001);    // TODOS 260726_Note1, 0.14 셀 03 mV to V
+              DbgRegs.CellVoltF[3]  = (float32)(DbgRegs.CellVolt[3]*0.001);    // TODOS 260726_Note1, 0.14 셀 04 mV to V
+              DbgRegs.CellVoltF[4]  = (float32)(DbgRegs.CellVolt[4]*0.001);    // TODOS 260726_Note1, 0.14 셀 05 mV to V
+              DbgRegs.CellVoltF[5]  = (float32)(DbgRegs.CellVolt[5]*0.001);    // TODOS 260726_Note1, 0.14 셀 06 mV to V
+              DbgRegs.CellVoltF[6]  = (float32)(DbgRegs.CellVolt[6]*0.001);    // TODOS 260726_Note1, 0.14 셀 07 mV to V
+              DbgRegs.CellVoltF[7]  = (float32)(DbgRegs.CellVolt[7]*0.001);    // TODOS 260726_Note1, 0.14 셀 08 mV to V
+              DbgRegs.CellVoltF[8]  = (float32)(DbgRegs.CellVolt[8]*0.001);    // TODOS 260726_Note1, 0.14 셀 09 mV to V
+              DbgRegs.CellVoltF[9]  = (float32)(DbgRegs.CellVolt[9]*0.001);    // TODOS 260726_Note1, 0.14 셀 10 mV to V
+              DbgRegs.CellVoltF[10] = (float32)(DbgRegs.CellVolt[10]*0.001);   // TODOS 260726_Note1, 0.14 셀 11 mV to V
+              DbgRegs.CellVoltF[11] = (float32)(DbgRegs.CellVolt[11]*0.001);   // TODOS 260726_Note1, 0.14 셀 12 mV to V
+              DbgRegs.CellVoltF[12] = (float32)(DbgRegs.CellVolt[12]*0.001);   // TODOS 260726_Note1, 0.14 셀 13 mV to V
+              DbgRegs.CellVoltF[13] = (float32)(DbgRegs.CellVolt[13]*0.001);   // TODOS 260726_Note1, 0.14 셀 14 mV to V
+              DbgRegs.CellVoltF[14] = (float32)(DbgRegs.CellVolt[14]*0.001);   // TODOS 260726_Note1, 0.14 셀 15 mV to V
+              DbgRegs.CellVoltF[15] = (float32)(DbgRegs.CellVolt[15]*0.001);   // TODOS 260726_Note1, 0.14 셀 16 mV to V
+              DbgRegs.CellVoltF[16] = (float32)(DbgRegs.CellVolt[16]*0.001);   // TODOS 260726_Note1, 0.14 셀 17 mV to V
+              DbgRegs.CellVoltF[17] = (float32)(DbgRegs.CellVolt[17]*0.001);   // TODOS 260726_Note1, 0.14 셀 18 mV to V
+              DbgRegs.CellVoltF[18] = (float32)(DbgRegs.CellVolt[18]*0.001);   // TODOS 260726_Note1, 0.14 셀 19 mV to V
+              DbgRegs.CellVoltF[19] = (float32)(DbgRegs.CellVolt[19]*0.001);   // TODOS 260726_Note1, 0.14 셀 20 mV to V
+              DbgRegs.CellVoltF[20] = (float32)(DbgRegs.CellVolt[20]*0.001);   // TODOS 260726_Note1, 0.14 셀 21 mV to V
+              DbgRegs.CellVoltF[21] = (float32)(DbgRegs.CellVolt[21]*0.001);   // TODOS 260726_Note1, 0.14 셀 22 mV to V
+              memcpy(&SysRegs.Bat80VCellVoltageF[0],    &DbgRegs.CellVoltF[0],sizeof(float32)*22);
+              #endif 
 
               //LEDSysState_L;
        break;
@@ -987,8 +1089,13 @@ interrupt void cpu_timer0_isr(void)
                //LEDSysState_L;
        break;
        case 30 :
+               #if DebugBoardMode == 0
                memcpy(&CANARegs.BAT80VoltageCell[0],     &Slave1Regs.CellVoltage[0],sizeof(Uint16)*11);
                memcpy(&CANARegs.BAT80VoltageCell[11],    &Slave2Regs.CellVoltage[0],sizeof(Uint16)*11);
+               #endif 
+               #if DebugBoardMode != 0
+                memcpy(&CANARegs.BAT80VoltageCell[0],     &DbgRegs.CellVolt[0],sizeof(Uint16)*22);
+               #endif
 
        break;
        case 40 :
@@ -1004,26 +1111,38 @@ interrupt void cpu_timer0_isr(void)
                 //At 80MHZ, operation time is 0.151msec
                 /*--------------------------------------------------------------
                  * 260715 : 통신 복구 시 통신알람 자동 해제(auto-clear) 추가.
-                 *          기존은 PackCAN_ERR이 latch되어 VCU 통신 복구돼도
+                 *          기존은 PackFcu_CANErr이 latch되어 VCU 통신 복구돼도
                  *          재부팅(SysVarINIT) 전까지 알람이 유지되던 문제
                  *--------------------------------------------------------------*/
                 SysRegs.SysCanRxCount++;
                 if(SysRegs.SysCanRxCount>=10)
                 {
-                    //CANARegs.PMSCMDRegs.bit.RUNStatus=0;       // TODO : [검증] 260715_Note1, 0.12 PackCAN_ERR 발생해도 RUN 유지(파워릴레이 유지)
-                    SysRegs.BAT80VAlarmReg.bit.PackCAN_ERR=1;
+                    //CANARegs.PMSCMDRegs.bit.RUNStatus=0;       // TODO : [검증] 260715_Note1, 0.12 PackFcu_CANErr 발생해도 RUN 유지(파워릴레이 유지)
+                    /*--------------------------------------------------------------
+                     * 260808 : PackFcu_CANErr 검출을 버전별 분기
+                     *          VER<16(0.15) → Fault(차단), VER>=16 → Alarm(경고)
+                     *--------------------------------------------------------------*/
+                #if (Product_Version < 16)
+                    SysRegs.BAT80VFaultReg.bit.PackFcu_CANErr=1;   // TODO : [검증] 260808_Note1, 0.15 VER15 통신끊김 Fault(차단)
+                #else
+                    SysRegs.BAT80VAlarmReg.bit.PackFcu_CANErr=1;   // VER16+ 통신끊김 Alarm(경고)
+                #endif
                     SysRegs.SysCanRxCount=11000;
                 }
                 else
                 {
-                    SysRegs.BAT80VAlarmReg.bit.PackCAN_ERR=0;   // TODO : [검증] 260715_Note1, 0.12 수신워치독<10(통신정상)이면 통신알람 해제
+                #if (Product_Version < 16)
+                    SysRegs.BAT80VFaultReg.bit.PackFcu_CANErr=0;
+                #else
+                    SysRegs.BAT80VAlarmReg.bit.PackFcu_CANErr=0;   // TODO : [검증] 260715_Note1, 0.12 수신워치독<10(통신정상)이면 통신알람 해제
+                #endif
                 }
        break;
        case 8:
                 //At 80MHZ, operation time is 0.151msec
                if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                {
-                   CANATX(0x603,8,SysRegs.BAT80VAlarmReg.all,SysRegs.BAT80VFaultReg.Word.DataL,SysRegs.BAT80VFaultReg.Word.DataH,CANARegs.BAT80VAh);
+                   CANATX(0x603,8,SysRegs.BAT80VAlarmReg.all,SysRegs.BAT80VFaultReg.Word.DataL,SysRegs.BAT80VFaultReg.Word.DataH,0X0000);
                }
        break;
        case 11:
@@ -1083,16 +1202,19 @@ interrupt void cpu_timer0_isr(void)
                     {
                         Slave2Regs.ErrorCount=0;
                     }
-                    CANARegs.CANTxA = ComBine(CANARegs.MailBox0RxCount,CANARegs.MailBoxRxCount);
-                    CANARegs.CANTxB = ComBine(CANARegs.MailBox3RxCount,CANARegs.MailBox2RxCount);
-                    CANARegs.CANTxC = ComBine(Slave1Regs.ErrorCount,SysRegs.SysCanRxCount);
-                    CANARegs.CANTxD = ComBine(0,Slave2Regs.ErrorCount);
+                    CANARegs.CANTxA = ComBine(CANARegs.MailBox0RxCount,CANARegs.MailBoxRxCount);    // TODO : [검증] 260808_Note1, 0.15 CAN RX 전체, 전류센서 카운터
+                    CANARegs.CANTxB = ComBine(SysRegs.SysCanRxCount,CANARegs.MailBox2RxCount);      // TODO : [검증] 260808_Note1, 0.15 CAN FCU 카운터,SysRegs.SysCanRxCount(리셋 카운터값)
+                    CANARegs.CANTxC = ComBine(Slave2Regs.ErrorCount,Slave1Regs.ErrorCount);         // TODO : [검증] 260808_Note1, 0.15 Slave2,Slave1 에러 카운터
+                    CANARegs.CANTxD = 0;
                     CANATX(0x608,8,CANARegs.CANTxA,CANARegs.CANTxB,CANARegs.CANTxC, CANARegs.CANTxD);
-                    CANARegs.AlarmNum +=1;
-                    if(CANARegs.AlarmNum>=13)
-                    {
-                        CANARegs.AlarmNum =0;
-                    }
+                    /*--------------------------------------------------------------
+                     * 260808 : AlarmNum 미사용(write-only) 제거 예정
+                     *--------------------------------------------------------------*/
+                    //CANARegs.AlarmNum +=1;              // TODO : [삭제] 260808_Note1, 0.15 미참조 dead
+                    //if(CANARegs.AlarmNum>=13)
+                    //{
+                    //    CANARegs.AlarmNum =0;
+                    //}
                 }
        break;
        case 26:
@@ -1109,7 +1231,6 @@ interrupt void cpu_timer0_isr(void)
                    //CANARegs.CellVoltTxA = CANARegs.BAT80VoltageCell[CANARegs.CellIRTxNum+0];
                    //CANARegs.CellVoltTxB = CANARegs.BAT80VoltageCell[CANARegs.CellIRTxNum+1];
                    //CANARegs.CellVoltTxC = CANARegs.BAT80VoltageCell[CANARegs.CellIRTxNum+2];
-
                    CANARegs.CellVoltTxA = (CANARegs.CellVoltTxNum+0<22) ? CANARegs.BAT80VoltageCell[CANARegs.CellVoltTxNum+0] : 0;   // TODO : [검증] 260715_Note1, 0.11 22셀 전압 0x609 송신
                    CANARegs.CellVoltTxB = (CANARegs.CellVoltTxNum+1<22) ? CANARegs.BAT80VoltageCell[CANARegs.CellVoltTxNum+1] : 0;
                    CANARegs.CellVoltTxC = (CANARegs.CellVoltTxNum+2<22) ? CANARegs.BAT80VoltageCell[CANARegs.CellVoltTxNum+2] : 0;
@@ -1179,9 +1300,35 @@ interrupt void cpu_timer0_isr(void)
        break;
 
        case 100:
+                #if DebugBoardMode == 0
                 memcpy(&SysRegs.Bat80VCellTemperatureF[0],     &Slave1Regs.CellTemperatureF[0],sizeof(float32)*11);
                 memcpy(&SysRegs.Bat80VCellTemperatureF[11],    &Slave2Regs.CellTemperatureF[0],sizeof(float32)*11);
-
+                #endif
+                #if DebugBoardMode != 0
+                DbgRegs.CellTempF[0]=(float32)(DbgRegs.CellTemp[0]*0.1);   // TODOS 260726_Note1, 0.14 셀 01 0.1℃ to ℃
+                DbgRegs.CellTempF[1]=(float32)(DbgRegs.CellTemp[1]*0.1);   // TODOS 260726_Note1, 0.14 셀 02 0.1℃ to ℃
+                DbgRegs.CellTempF[2]=(float32)(DbgRegs.CellTemp[2]*0.1);   // TODOS 260726_Note1, 0.14 셀 03 0.1℃ to ℃
+                DbgRegs.CellTempF[3]=(float32)(DbgRegs.CellTemp[3]*0.1);   // TODOS 260726_Note1, 0.14 셀 04 0.1℃ to ℃
+                DbgRegs.CellTempF[4]=(float32)(DbgRegs.CellTemp[4]*0.1);   // TODOS 260726_Note1, 0.14 셀 05 0.1℃ to ℃
+                DbgRegs.CellTempF[5]=(float32)(DbgRegs.CellTemp[5]*0.1);   // TODOS 260726_Note1, 0.14 셀 06 0.1℃ to ℃
+                DbgRegs.CellTempF[6]=(float32)(DbgRegs.CellTemp[6]*0.1);   // TODOS 260726_Note1, 0.14 셀 07 0.1℃ to ℃
+                DbgRegs.CellTempF[7]=(float32)(DbgRegs.CellTemp[7]*0.1);   // TODOS 260726_Note1, 0.14 셀 08 0.1℃ to ℃
+                DbgRegs.CellTempF[8]=(float32)(DbgRegs.CellTemp[8]*0.1);   // TODOS 260726_Note1, 0.14 셀 09 0.1℃ to ℃
+                DbgRegs.CellTempF[9]=(float32)(DbgRegs.CellTemp[9]*0.1);   // TODOS 260726_Note1, 0.14 셀 10 0.1℃ to ℃
+                DbgRegs.CellTempF[10]=(float32)(DbgRegs.CellTemp[10]*0.1); // TODOS 260726_Note1, 0.14 셀 11 0.1℃ to ℃
+                DbgRegs.CellTempF[11]=(float32)(DbgRegs.CellTemp[11]*0.1); // TODOS 260726_Note1, 0.14 셀 12 0.1℃ to ℃
+                DbgRegs.CellTempF[12]=(float32)(DbgRegs.CellTemp[12]*0.1); // TODOS 260726_Note1, 0.14 셀 13 0.1℃ to ℃
+                DbgRegs.CellTempF[13]=(float32)(DbgRegs.CellTemp[13]*0.1); // TODOS 260726_Note1, 0.14 셀 14 0.1℃ to ℃
+                DbgRegs.CellTempF[14]=(float32)(DbgRegs.CellTemp[14]*0.1); // TODOS 260726_Note1, 0.14 셀 15 0.1℃ to ℃
+                DbgRegs.CellTempF[15]=(float32)(DbgRegs.CellTemp[15]*0.1); // TODOS 260726_Note1, 0.14 셀 16 0.1℃ to ℃
+                DbgRegs.CellTempF[16]=(float32)(DbgRegs.CellTemp[16]*0.1); // TODOS 260726_Note1, 0.14 셀 17 0.1℃ to ℃
+                DbgRegs.CellTempF[17]=(float32)(DbgRegs.CellTemp[17]*0.1); // TODOS 260726_Note1, 0.14 셀 18 0.1℃ to ℃
+                DbgRegs.CellTempF[18]=(float32)(DbgRegs.CellTemp[18]*0.1); // TODOS 260726_Note1, 0.14 셀 19 0.1℃ to ℃
+                DbgRegs.CellTempF[19]=(float32)(DbgRegs.CellTemp[19]*0.1); // TODOS 260726_Note1, 0.14 셀 20 0.1℃ to ℃
+                DbgRegs.CellTempF[20]=(float32)(DbgRegs.CellTemp[20]*0.1); // TODOS 260726_Note1, 0.14 셀 21 0.1℃ to ℃
+                DbgRegs.CellTempF[21]=(float32)(DbgRegs.CellTemp[21]*0.1); // TODOS 260726_Note1, 0.14 셀 22 0.1℃ to ℃
+                memcpy(&SysRegs.Bat80VCellTemperatureF[0],     &DbgRegs.CellTempF[0],sizeof(float32)*22);
+                #endif
        break;
 
        case 120:
@@ -1189,9 +1336,15 @@ interrupt void cpu_timer0_isr(void)
        break;
 
        case 150:
+                #if DebugBoardMode == 0
                 memcpy(&CANARegs.BAT80VTemperatureCell[0],     &Slave1Regs.CellTemperature[0],sizeof(int)*11);
                 memcpy(&CANARegs.BAT80VTemperatureCell[11],    &Slave2Regs.CellTemperature[0],sizeof(int)*11);
-       break;
+                #endif
+                #if DebugBoardMode != 0
+                memcpy(&CANARegs.BAT80VTemperatureCell[0],     &DbgRegs.CellTemp[0],sizeof(int)*22);
+                #endif
+
+       break;   
 
        case 200:
                 Cal80VSysTemperatureHandle(&SysRegs);
@@ -1294,6 +1447,153 @@ interrupt void ISR_CANRXINTA(void)
             }
             ECanaRegs.CANRMP.bit.RMP3 = 1;
         }
+#if DebugBoardMode != 0
+        /* 0x401~0x406 : cell voltage mV, 0x407~0x40C : cell temperature 0.1degC */
+        if(ECanaRegs.CANRMP.bit.RMP4==1)
+        {
+            if(ECanaMboxes.MBOX4.MSGID.bit.STDMSGID==0x401)
+            {
+                DbgRegs.CellVolt[0]  = (ECanaMboxes.MBOX4.MDL.byte.BYTE1<<8)|(ECanaMboxes.MBOX4.MDL.byte.BYTE0);   // TODOS 260726_Note1, 0.14 셀 01
+                DbgRegs.CellVolt[1]  = (ECanaMboxes.MBOX4.MDL.byte.BYTE3<<8)|(ECanaMboxes.MBOX4.MDL.byte.BYTE2);   // TODOS 260726_Note1, 0.14 셀 02
+                DbgRegs.CellVolt[2]  = (ECanaMboxes.MBOX4.MDH.byte.BYTE5<<8)|(ECanaMboxes.MBOX4.MDH.byte.BYTE4);   // TODOS 260726_Note1, 0.14 셀 03
+                DbgRegs.CellVolt[3]  = (ECanaMboxes.MBOX4.MDH.byte.BYTE7<<8)|(ECanaMboxes.MBOX4.MDH.byte.BYTE6);   // TODOS 260726_Note1, 0.14 셀 04
+                DbgRegs.VoltFlag.bit.Frame01 = 1;
+                DbgRegs.VoltCnt++;
+                if(DbgRegs.VoltCnt>200){DbgRegs.VoltCnt=0;}
+            }
+            ECanaRegs.CANRMP.bit.RMP4 = 1;
+        }
+        if(ECanaRegs.CANRMP.bit.RMP5==1)
+        {
+            if(ECanaMboxes.MBOX5.MSGID.bit.STDMSGID==0x402)
+            {
+                DbgRegs.CellVolt[4]  = (ECanaMboxes.MBOX5.MDL.byte.BYTE1<<8)|(ECanaMboxes.MBOX5.MDL.byte.BYTE0);   // TODOS 260726_Note1, 0.14 셀 05
+                DbgRegs.CellVolt[5]  = (ECanaMboxes.MBOX5.MDL.byte.BYTE3<<8)|(ECanaMboxes.MBOX5.MDL.byte.BYTE2);   // TODOS 260726_Note1, 0.14 셀 06
+                DbgRegs.CellVolt[6]  = (ECanaMboxes.MBOX5.MDH.byte.BYTE5<<8)|(ECanaMboxes.MBOX5.MDH.byte.BYTE4);   // TODOS 260726_Note1, 0.14 셀 07
+                DbgRegs.CellVolt[7]  = (ECanaMboxes.MBOX5.MDH.byte.BYTE7<<8)|(ECanaMboxes.MBOX5.MDH.byte.BYTE6);   // TODOS 260726_Note1, 0.14 셀 08
+                DbgRegs.VoltFlag.bit.Frame02 = 1;
+            }
+            ECanaRegs.CANRMP.bit.RMP5 = 1;
+        }
+        if(ECanaRegs.CANRMP.bit.RMP6==1)
+        {
+            if(ECanaMboxes.MBOX6.MSGID.bit.STDMSGID==0x403)
+            {
+                DbgRegs.CellVolt[8]  = (ECanaMboxes.MBOX6.MDL.byte.BYTE1<<8)|(ECanaMboxes.MBOX6.MDL.byte.BYTE0);   // TODOS 260726_Note1, 0.14 셀 09
+                DbgRegs.CellVolt[9]  = (ECanaMboxes.MBOX6.MDL.byte.BYTE3<<8)|(ECanaMboxes.MBOX6.MDL.byte.BYTE2);   // TODOS 260726_Note1, 0.14 셀 10
+                DbgRegs.CellVolt[10] = (ECanaMboxes.MBOX6.MDH.byte.BYTE5<<8)|(ECanaMboxes.MBOX6.MDH.byte.BYTE4);   // TODOS 260726_Note1, 0.14 셀 11
+                DbgRegs.CellVolt[11] = (ECanaMboxes.MBOX6.MDH.byte.BYTE7<<8)|(ECanaMboxes.MBOX6.MDH.byte.BYTE6);   // TODOS 260726_Note1, 0.14 셀 12
+                DbgRegs.VoltFlag.bit.Frame03 = 1;
+            }
+            ECanaRegs.CANRMP.bit.RMP6 = 1;
+        }
+        if(ECanaRegs.CANRMP.bit.RMP7==1)
+        {
+            if(ECanaMboxes.MBOX7.MSGID.bit.STDMSGID==0x404)
+            {
+                DbgRegs.CellVolt[12] = (ECanaMboxes.MBOX7.MDL.byte.BYTE1<<8)|(ECanaMboxes.MBOX7.MDL.byte.BYTE0);   // TODOS 260726_Note1, 0.14 셀 13
+                DbgRegs.CellVolt[13] = (ECanaMboxes.MBOX7.MDL.byte.BYTE3<<8)|(ECanaMboxes.MBOX7.MDL.byte.BYTE2);   // TODOS 260726_Note1, 0.14 셀 14
+                DbgRegs.CellVolt[14] = (ECanaMboxes.MBOX7.MDH.byte.BYTE5<<8)|(ECanaMboxes.MBOX7.MDH.byte.BYTE4);   // TODOS 260726_Note1, 0.14 셀 15
+                DbgRegs.CellVolt[15] = (ECanaMboxes.MBOX7.MDH.byte.BYTE7<<8)|(ECanaMboxes.MBOX7.MDH.byte.BYTE6);   // TODOS 260726_Note1, 0.14 셀 16
+                DbgRegs.VoltFlag.bit.Frame04 = 1;
+            }
+            ECanaRegs.CANRMP.bit.RMP7 = 1;
+        }
+        if(ECanaRegs.CANRMP.bit.RMP8==1)
+        {
+            if(ECanaMboxes.MBOX8.MSGID.bit.STDMSGID==0x405)
+            {
+                DbgRegs.CellVolt[16] = (ECanaMboxes.MBOX8.MDL.byte.BYTE1<<8)|(ECanaMboxes.MBOX8.MDL.byte.BYTE0);   // TODOS 260726_Note1, 0.14 셀 17
+                DbgRegs.CellVolt[17] = (ECanaMboxes.MBOX8.MDL.byte.BYTE3<<8)|(ECanaMboxes.MBOX8.MDL.byte.BYTE2);   // TODOS 260726_Note1, 0.14 셀 18
+                DbgRegs.CellVolt[18] = (ECanaMboxes.MBOX8.MDH.byte.BYTE5<<8)|(ECanaMboxes.MBOX8.MDH.byte.BYTE4);   // TODOS 260726_Note1, 0.14 셀 19
+                DbgRegs.CellVolt[19] = (ECanaMboxes.MBOX8.MDH.byte.BYTE7<<8)|(ECanaMboxes.MBOX8.MDH.byte.BYTE6);   // TODOS 260726_Note1, 0.14 셀 20
+                DbgRegs.VoltFlag.bit.Frame05 = 1;
+            }
+            ECanaRegs.CANRMP.bit.RMP8 = 1;
+        }
+        if(ECanaRegs.CANRMP.bit.RMP9==1)
+        {
+            if(ECanaMboxes.MBOX9.MSGID.bit.STDMSGID==0x406)
+            {
+                DbgRegs.CellVolt[20] = (ECanaMboxes.MBOX9.MDL.byte.BYTE1<<8)|(ECanaMboxes.MBOX9.MDL.byte.BYTE0);   // TODOS 260726_Note1, 0.14 셀 21
+                DbgRegs.CellVolt[21] = (ECanaMboxes.MBOX9.MDL.byte.BYTE3<<8)|(ECanaMboxes.MBOX9.MDL.byte.BYTE2);   // TODOS 260726_Note1, 0.14 셀 22 (BYTE4~7 Rsvd)
+                DbgRegs.VoltFlag.bit.Frame06 = 1;
+            }
+            ECanaRegs.CANRMP.bit.RMP9 = 1;
+        }
+        if(ECanaRegs.CANRMP.bit.RMP10==1)
+        {
+            if(ECanaMboxes.MBOX10.MSGID.bit.STDMSGID==0x407)
+            {
+                DbgRegs.CellTemp[0]  = (int16)((ECanaMboxes.MBOX10.MDL.byte.BYTE1<<8)|(ECanaMboxes.MBOX10.MDL.byte.BYTE0));   // TODOS 260726_Note1, 0.14 온도 01
+                DbgRegs.CellTemp[1]  = (int16)((ECanaMboxes.MBOX10.MDL.byte.BYTE3<<8)|(ECanaMboxes.MBOX10.MDL.byte.BYTE2));   // TODOS 260726_Note1, 0.14 온도 02
+                DbgRegs.CellTemp[2]  = (int16)((ECanaMboxes.MBOX10.MDH.byte.BYTE5<<8)|(ECanaMboxes.MBOX10.MDH.byte.BYTE4));   // TODOS 260726_Note1, 0.14 온도 03
+                DbgRegs.CellTemp[3]  = (int16)((ECanaMboxes.MBOX10.MDH.byte.BYTE7<<8)|(ECanaMboxes.MBOX10.MDH.byte.BYTE6));   // TODOS 260726_Note1, 0.14 온도 04
+                DbgRegs.TempFlag.bit.Frame01 = 1;
+                DbgRegs.TempCnt++;
+                if(DbgRegs.TempCnt>200){DbgRegs.TempCnt=0;}
+            }
+            ECanaRegs.CANRMP.bit.RMP10 = 1;
+        }
+        if(ECanaRegs.CANRMP.bit.RMP11==1)
+        {
+            if(ECanaMboxes.MBOX11.MSGID.bit.STDMSGID==0x408)
+            {
+                DbgRegs.CellTemp[4]  = (int16)((ECanaMboxes.MBOX11.MDL.byte.BYTE1<<8)|(ECanaMboxes.MBOX11.MDL.byte.BYTE0));   // TODOS 260726_Note1, 0.14 온도 05
+                DbgRegs.CellTemp[5]  = (int16)((ECanaMboxes.MBOX11.MDL.byte.BYTE3<<8)|(ECanaMboxes.MBOX11.MDL.byte.BYTE2));   // TODOS 260726_Note1, 0.14 온도 06
+                DbgRegs.CellTemp[6]  = (int16)((ECanaMboxes.MBOX11.MDH.byte.BYTE5<<8)|(ECanaMboxes.MBOX11.MDH.byte.BYTE4));   // TODOS 260726_Note1, 0.14 온도 07
+                DbgRegs.CellTemp[7]  = (int16)((ECanaMboxes.MBOX11.MDH.byte.BYTE7<<8)|(ECanaMboxes.MBOX11.MDH.byte.BYTE6));   // TODOS 260726_Note1, 0.14 온도 08
+                DbgRegs.TempFlag.bit.Frame02 = 1;
+            }
+            ECanaRegs.CANRMP.bit.RMP11 = 1;
+        }
+        if(ECanaRegs.CANRMP.bit.RMP12==1)
+        {
+            if(ECanaMboxes.MBOX12.MSGID.bit.STDMSGID==0x409)
+            {
+                DbgRegs.CellTemp[8]  = (int16)((ECanaMboxes.MBOX12.MDL.byte.BYTE1<<8)|(ECanaMboxes.MBOX12.MDL.byte.BYTE0));   // TODOS 260726_Note1, 0.14 온도 09
+                DbgRegs.CellTemp[9]  = (int16)((ECanaMboxes.MBOX12.MDL.byte.BYTE3<<8)|(ECanaMboxes.MBOX12.MDL.byte.BYTE2));   // TODOS 260726_Note1, 0.14 온도 10
+                DbgRegs.CellTemp[10] = (int16)((ECanaMboxes.MBOX12.MDH.byte.BYTE5<<8)|(ECanaMboxes.MBOX12.MDH.byte.BYTE4));   // TODOS 260726_Note1, 0.14 온도 11
+                DbgRegs.CellTemp[11] = (int16)((ECanaMboxes.MBOX12.MDH.byte.BYTE7<<8)|(ECanaMboxes.MBOX12.MDH.byte.BYTE6));   // TODOS 260726_Note1, 0.14 온도 12
+                DbgRegs.TempFlag.bit.Frame03 = 1;
+            }
+            ECanaRegs.CANRMP.bit.RMP12 = 1;
+        }
+        if(ECanaRegs.CANRMP.bit.RMP13==1)
+        {
+            if(ECanaMboxes.MBOX13.MSGID.bit.STDMSGID==0x40A)
+            {
+                DbgRegs.CellTemp[12] = (int16)((ECanaMboxes.MBOX13.MDL.byte.BYTE1<<8)|(ECanaMboxes.MBOX13.MDL.byte.BYTE0));   // TODOS 260726_Note1, 0.14 온도 13
+                DbgRegs.CellTemp[13] = (int16)((ECanaMboxes.MBOX13.MDL.byte.BYTE3<<8)|(ECanaMboxes.MBOX13.MDL.byte.BYTE2));   // TODOS 260726_Note1, 0.14 온도 14
+                DbgRegs.CellTemp[14] = (int16)((ECanaMboxes.MBOX13.MDH.byte.BYTE5<<8)|(ECanaMboxes.MBOX13.MDH.byte.BYTE4));   // TODOS 260726_Note1, 0.14 온도 15
+                DbgRegs.CellTemp[15] = (int16)((ECanaMboxes.MBOX13.MDH.byte.BYTE7<<8)|(ECanaMboxes.MBOX13.MDH.byte.BYTE6));   // TODOS 260726_Note1, 0.14 온도 16
+                DbgRegs.TempFlag.bit.Frame04 = 1;
+            }
+            ECanaRegs.CANRMP.bit.RMP13 = 1;
+        }
+        if(ECanaRegs.CANRMP.bit.RMP14==1)
+        {
+            if(ECanaMboxes.MBOX14.MSGID.bit.STDMSGID==0x40B)
+            {
+                DbgRegs.CellTemp[16] = (int16)((ECanaMboxes.MBOX14.MDL.byte.BYTE1<<8)|(ECanaMboxes.MBOX14.MDL.byte.BYTE0));   // TODOS 260726_Note1, 0.14 온도 17
+                DbgRegs.CellTemp[17] = (int16)((ECanaMboxes.MBOX14.MDL.byte.BYTE3<<8)|(ECanaMboxes.MBOX14.MDL.byte.BYTE2));   // TODOS 260726_Note1, 0.14 온도 18
+                DbgRegs.CellTemp[18] = (int16)((ECanaMboxes.MBOX14.MDH.byte.BYTE5<<8)|(ECanaMboxes.MBOX14.MDH.byte.BYTE4));   // TODOS 260726_Note1, 0.14 온도 19
+                DbgRegs.CellTemp[19] = (int16)((ECanaMboxes.MBOX14.MDH.byte.BYTE7<<8)|(ECanaMboxes.MBOX14.MDH.byte.BYTE6));   // TODOS 260726_Note1, 0.14 온도 20
+                DbgRegs.TempFlag.bit.Frame05 = 1;
+            }
+            ECanaRegs.CANRMP.bit.RMP14 = 1;
+        }
+        if(ECanaRegs.CANRMP.bit.RMP15==1)
+        {
+            if(ECanaMboxes.MBOX15.MSGID.bit.STDMSGID==0x40C)
+            {
+                DbgRegs.CellTemp[20] = (int16)((ECanaMboxes.MBOX15.MDL.byte.BYTE1<<8)|(ECanaMboxes.MBOX15.MDL.byte.BYTE0));   // TODOS 260726_Note1, 0.14 온도 21
+                DbgRegs.CellTemp[21] = (int16)((ECanaMboxes.MBOX15.MDL.byte.BYTE3<<8)|(ECanaMboxes.MBOX15.MDL.byte.BYTE2));   // TODOS 260726_Note1, 0.14 온도 22 (BYTE4~7 Rsvd)
+                DbgRegs.TempFlag.bit.Frame06 = 1;
+            }
+            ECanaRegs.CANRMP.bit.RMP15 = 1;
+        }
+#endif
     }
    // ECanaShadow.CANRMP.all = 0;
    // ECanaRegs.CANRMP.all = ECanaShadow.CANRMP.all ;
@@ -1303,68 +1603,4 @@ interrupt void ISR_CANRXINTA(void)
 
 }//EOF
 
-/*========================================
- * PWRHoldHandle : BMS 전원 유지(PWRHOLD, GPIO21) 제어
- *   ※ 1ms ISR 주기 호출 전제 (C_PwrHoldOffDelayCount = 1ms×300000 = 5분)
- *
- *   - RUNStatus == 1 : VCU RUN 명령 → 전원 유지 (PWRHOLD_ON)
- *   - RUNStatus == 0 : RUN 종료 → VCU 통신 상태로 분기
- *       · 통신 끊김  : 원 OFF 판단 → 5분전 유지 후 PWRHOLD_OFF (대기 중 CAN 통신은 유지)
- *       · 통신 정상  : BMS 전원 ON 판단 → PWRHOLD_ON (SOC는 전류적산 + NVRAM으로만 계속)
- *
- *   VCU 통신 상태는 수신 워치독(s->SysCanRxCount)으로 판정:
- *     VCU 수신 시 ISR에서 0 리셋, 100ms마다 증가. C_VcuCommLostCount 이상이면 끊김.
- *
- *   TODO(검증 필요): 실기 검증 전 신규 로직. 검증 항목 —
- *     (1) ISR 주기 1ms 여부(CpuTimer0 PRD=80400), (2) GPIO21 극성(High=전원유지),
- *     (3) VCU 미연결 시 ~5분 후 자동 PWRHOLD_OFF 동작, (4) 통신 복구 시 카운트 리셋.
- *     검증 완료 후 본 TODO 제거.
- *========================================*/
-void PWRHoldHandle(SystemReg *s)
-{
-    static Uint32 PwrOffDelayCount = 0u;
-    Uint16 VcuCommLost;
 
-    VcuCommLost = (s->SysCanRxCount >= C_VcuCommLostCount) ? 1u : 0u;
-
-    if(CANARegs.PMSCMDRegs.bit.RUNStatus == 1u)
-    {
-        /* VCU RUN 명령 → 전원 유지 */
-        PWRHOLD_ON;
-        CANARegs.BAT80VDigitalOutPutReg.bit.PWRHoldOUT = 1u;
-        PwrOffDelayCount = 0u;
-    }
-    else
-    {
-        /* RUNStatus == 0 : RUN 종료 */
-        if(VcuCommLost == 1u)
-        {
-            /* VCU 통신 끊김 → 전원 OFF 판단. 5분 유지 후 PWRHOLD_OFF */
-            if(PwrOffDelayCount < C_PwrHoldOffDelayCount)
-            {
-                PwrOffDelayCount++;
-            }
-            else
-            {
-                PWRHOLD_OFF;
-                CANARegs.BAT80VDigitalOutPutReg.bit.PWRHoldOUT = 0; 
-            }
-        }
-        else
-        {
-            /* VCU 통신 정상 → BMS 전원 ON 판단, 전원 유지 (SOC는 전류적산 + NVRAM) */
-            PWRHOLD_ON;
-            CANARegs.BAT80VDigitalOutPutReg.bit.PWRHoldOUT = 1u;
-            PwrOffDelayCount = 0u;
-        }
-    }
-}
-/*
-interrupt void cpu_timer2_isr(void)
-{  EALLOW;
-   CpuTimer2.InterruptCount++;
-   // The CPU acknowledges the interrupt.
-  // A_OVCHACurrent;
-   EDIS;
-}
-*/

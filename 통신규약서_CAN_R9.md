@@ -1,8 +1,8 @@
-# Pack BMS CAN 통신 규약서 (R6)
+# Pack BMS CAN 통신 규약서 (R9)
 
 - **대상 제품**: 47 HDFC 10kW NCM Pack BMS (F28069)
-- **제품 코드**: Product_Type = 3, Product_Version = 10 (`parameter.h`)
-- **문서 버전**: R6
+- **제품 코드**: Product_Type = 0, Product_Version = 15 (`parameter.h`)
+- **문서 버전**: R9 (2026-08-09)
 - **기준 소스**: `SysSoure/main.c`, `SysSoure/DSP28x_Project.c`, `C2806XSrc/F2806x_ECan.c`, `C2806Xinclude/DSP28x_Project.h`
 
 ---
@@ -18,7 +18,7 @@
 | 비트 타이밍 | BRP=3, TSEG1=13, TSEG2=4, SAM=1 (3-sampling) | `CANBTC` |
 | DLC | 8 byte (전 메시지 고정) | |
 
-> ※ 다른 속도(1 Mbps / 250 kbps)는 `F2806x_ECan.c` 상단 매크로로 전환 가능하나 R6 양산 설정은 500 kbps.
+> ※ 다른 속도(1 Mbps / 250 kbps)는 `F2806x_ECan.c` 상단 매크로로 전환 가능하나 현 설정은 500 kbps.
 
 ---
 
@@ -79,9 +79,11 @@
 | 워드 | 신호 | 설명 |
 |------|------|------|
 | D0 | `BAT80VStatus` | bit[2:0] BATStatus, bit3 BalanceEN |
-| D1 | `BAT80VDigitalOutPutReg` | b0 NRlyOUT, b1 PRlyOUT, b2 CHARlyOUT, b8 LEDAlarmOUT, b9 LEDFaultOUT … |
+| D1 | `BAT80VDigitalOutPutReg` | b0 NRlyOUT(Neg_Rly), b1 PRlyOUT(Pos_Rly), b2 CHARlyOUT(PreChar_Rly) / LED 등 상위비트 미송신(0) |
 | D2 | `BAT80VStateReg` | 시스템 상태 비트(아래 4.1) |
 | D3 | 0x000 (예약) | — |
+
+> ※ N릴레이는 물리 제거되어 배터리(−)에 직결됨. NRlyOUT(Neg_Rly)은 항상 1(Close)로 고정 보고된다. (하드웨어 직결 반영 — VCU는 정상으로 해석)
 
 #### ▶ 0x603 — 알람/폴트 (100 ms)
 | 워드 | 신호 | 설명 |
@@ -99,7 +101,7 @@
 | D2 | 피크 충전 전력 | 0.1 kW (×10) | 20.2 kW |
 | D3 | 피크 방전 전력 | 0.1 kW (×10) | 12.2 kW |
 
-> ※ R6 현재 고정값. 추후 실측/연산값으로 대체 예정.
+> ※ 현재 고정값. 추후 실측/연산값으로 대체 예정.
 
 #### ▶ 0x605 — 셀 전압 통계 (100 ms)
 | 워드 | 신호 | 단위/스케일 |
@@ -125,7 +127,7 @@
 | D2 | IR Avg | 45 | 고정값 |
 | D3 | IR Div | 10 (Max−Min) | |
 
-> ※ R6 현재 고정 더미값. 내부저항 측정 알고리즘 미적용.
+> ※ 현재 고정 더미값. 내부저항 측정 알고리즘 미적용.
 
 #### ▶ 0x608 — 통신 진단 카운터 (100 ms)
 각 워드는 두 8-bit 카운터를 결합(`ComBine`)한 값.
@@ -175,26 +177,32 @@
 | bit | 신호 | bit | 신호 |
 |-----|------|-----|------|
 | 0 | PackOC | 8 | CellVolt_OV |
-| 1 | PackVSOC_OV | 9 | CellVolt_UN |
-| 2 | PackVSOC_UN | 10 | CellVolt_BL |
+| 1 | PackSOC_OV | 9 | CellVolt_UN |
+| 2 | PackSOC_UN | 10 | CellVolt_BL |
 | 3 | PackVolt_OV | 11 | CellTemp_OV |
 | 4 | PackVolt_UN | 12 | CellTemp_UN |
 | 5 | PackTemp_OV | 13 | CellTemp_BL |
-| 6 | PackTemp_UN | 14 | PackCAN_ERR |
+| 6 | PackTemp_UN | 14 | PackFcu_CANErr |
 | 7 | PackUnPWR_BL | 15 | (예약) |
+
+> ※ bit0~13은 R9 Warning(@0~13)과 1:1 대응. **bit14 PackFcu_CANErr는 R9 미정의(@14)이나 제조사 확장으로 유지** — 통신 끊김 경고용 (VCU는 무시 가능).
 
 ### 4.3 `BAT80VFaultReg` (0x603 D1=하위, D2=상위) — SystemFault
 | bit | 신호 | bit | 신호 |
 |-----|------|-----|------|
-| 0 | PackVCT_OV | 8 | CellVolt_OV |
-| 1 | PackVSOC_OV | 9 | CellVolt_UN |
-| 2 | PackVSOC_UN | 10 | CellVolt_BL |
+| 0 | PackOC | 8 | CellVolt_OV |
+| 1 | PackSOC_OV | 9 | CellVolt_UN |
+| 2 | PackSOC_UN | 10 | CellVolt_BL |
 | 3 | PackVolt_OV | 11 | CellTemp_OV |
 | 4 | PackVolt_UN | 12 | CellTemp_UN |
 | 5 | PackTemp_OV | 13 | CellTemp_BL |
 | 6 | PackTemp_UN | 14 | PackRLY_ERR |
-| 7 | PackUnPWR_BL | 15 | (예약) |
-| 16 | CellIR_OV / PackOcTime_Err / PrtcOcEvent_Err | | (D2 워드) |
+| 7 | PackUnPWR_BL | 15 | **PackFcu_CANErr** |
+| 16 | CellIR_OV | 17 | PackOcTime_Err |
+| 18 | PrtcOcEvent_Err | 19 | PackISO_ERR |
+| 20 | PackIMD_ERR | | |
+
+> ※ D1(bit0~15)=CAN @16~31, D2(bit16~)=CAN @32~. **bit15 `PackFcu_CANErr` = R9 @31 `Bsa_PrtctCanTmOut`** (동일 대상, 명칭만 상이). bit16 CellIR_OV = R9 @32. bit17~20은 R9 미정의 제조사 확장(@33~36).
 
 ---
 
@@ -217,7 +225,7 @@
 | 9 | PrtctReset | 보호 리셋 |
 | 10–15 | PCCMD10–15 | 예약 |
 
-> RUNStatus 미수신 1초 경과 시(100ms×10) `PackCAN_ERR` 알람 발생 후 RUNStatus 강제 0.
+> RUNStatus 미수신 1초 경과 시(100ms×10) `PackFcu_CANErr` 알람 발생 후 RUNStatus 강제 0.
 
 ### 5.2 0x400 — NVR 설정 (`NVRSetRegs`, NVRSET)
 | bit | 신호 | 설명 |
@@ -236,6 +244,7 @@
 | 버전 | 일자 | 내용 |
 |------|------|------|
 | R6 | 2026-06-30 | 소스(main.c 등) 기준 CAN 통신 규약 정리 |
+| R9 | 2026-08-09 | R9 규격 정합 — 알람/폴트 명칭(PackOC/PackSOC_OV·UN/PackFcu_CANErr), 0x602·0x603 갱신, 경고·장애 설정값 반영, 통신에러 VER 분기 |
 
 ---
 
@@ -243,3 +252,58 @@
 - 0x604 전력 한계, 0x607 내부저항: 현재 펌웨어 **고정값** 송신 (실측 연산 미적용).
 - 0x601 D3(SOH): SOH 연산은 존재하나 전송은 1000(100.0%) 고정.
 - 0x608 `ComBine` 바이트 상·하위 배치는 소스 사용 순서 기준 표기 — VCU 측 파싱 시 실측 확인 권장.
+
+---
+
+## 부록 B. 보호설정값 마스터 (2026-08-09 기준, VER 0.15)
+
+### B-1. 경고 (Warning) — 지연 100(=100ms), 히스테리시스 해제
+
+| 신호 | 설정 | 해제 | 매크로 | 상태 |
+|------|------|------|--------|------|
+| Bsa_WrnOC | 450.0 A | 405.0 | `C_PackCTOV_Warn`/`Rst` | ✅ |
+| Bsa_WrnSocH | 95.0 % | 92.2 | `C_PackSOCOV_Warn`/`Rst` | ✅ |
+| Bsa_WrnSocL | 5.0 % | 5.25 | `C_PackSOCUN_Warn`/`Rst` | ✅ |
+| Bsa_WrnOv | 90.9 V | 88.1 | `C_PackVoltOV_Warn`/`Rst` | ✅ |
+| Bsa_WrnUv | 66.0 V | 69.3 | `C_PackVoltUN_Warn`/`Rst` | ✅ |
+| Bsa_WrnOt | 47.0 ℃ | 44.7 | `C_PackTempOV_Warn`/`Rst` | ✅ |
+| Bsa_WrnUt | -25.0 ℃ | -23.8 | `C_PackTempUN_Warn`/`Rst` | ✅ |
+| Bsa_WrnUnbalPwr | — | — | — | 미사용 |
+| Bsa_WrnCellOv | 4.15 V | 4.129 | `C_CellVoltOV_Warn`/`Rst` | ✅ |
+| Bsa_WrnCellUv | 3.00 V | 3.015 | `C_CellVoltUN_Warn`/`Rst` | ✅ |
+| Bsa_WrnCellUnbalV | 200 mV | 67 | `C_CellVoltDIV_Warn`/`Rst` (0.2/0.067) | ✅ |
+| Bsa_WrnCellOt | 55.0 ℃ | 52.3 | `C_CellTempOV_Warn`/`Rst` | ✅ |
+| Bsa_WrnCellUt | -20.0 ℃ | -19.0 | `C_CellTempUN_Warn`/`Rst` | ✅ |
+| Bsa_WrnCellUnbalTmp | 10.0 ℃ | 5.0 | `C_CellTempDIV_Warn`/`Rst` | ✅ |
+
+### B-2. 통신
+
+| 신호 | 설정 | 해제 | 펌웨어 | 상태 |
+|------|------|------|--------|------|
+| BPA_WrnVcuCan_Err | 10 (1sec 미수신) | 10 (정상수신) | `SysCanRxCount>=10` | ✅ / VER15=Fault·VER16+=Alarm |
+
+### B-3. 장애 (Fault) — 즉시(지연 0)
+
+| 신호 | 설정 | 매크로 | 상태 |
+|------|------|--------|------|
+| Bsa_FltOc | 505.0 A | `C_PackCTOV_Fault` 505.0 | ✅ |
+| Bsa_FltOcTimer | 480 A / 1 sec | `C_PackOCTimer_Fault` 480 / `C_PackOCTimerCount` 1000 | ✅ |
+| Bsa_FltOcTime_min | 480 A / 2회·min | (`PrtcOcEvent_Err`) | ⛔ 미구현 |
+| Bsa_FltctSocH | 100.0 % | `C_PackSOCOV_Fault` | ✅ |
+| Bsa_FltctSocL | 0.0 % | `C_PackSOCUN_Fault` | ✅ |
+| Bsa_FltOv | 91.3 V | `C_PackVoltOV_Fault` | ✅ |
+| Bsa_FltUv | 62.7 V | `C_PackVoltUN_Fault` | ✅ |
+| Bsa_FltOt | 52.0 ℃ | `C_PackTempOV_Fault` | ✅ |
+| Bsa_FltUt | -35.0 ℃ | `C_PackTempUN_Fault` | ✅ |
+| Bsa_FltUnbalPwr | — | — | ⛔ 미구현 |
+| Bsa_FltCellOv | 4.20 V | `C_CellVoltOV_Fault` | ✅ |
+| Bsa_FltCellUv | 2.85 V | `C_CellVoltUN_Fault` | ✅ |
+| Bsa_FltCellUnbalVlt | 350 mV | `C_CellVoltDIV_Fault` (0.35) | ✅ |
+| Bsa_FltCellOt | 60.0 ℃ | `C_CellTempOV_Fault` | ✅ |
+| Bsa_FltCellUt | -30.0 ℃ | `C_CellTempUN_Fault` | ✅ |
+| Bsa_FltCharCellUt | 15.0 ℃ | (충전 중 셀저온) | ⛔ 미구현(추후) |
+| Bsa_FltCellUnbalTmp | 10.0 ℃ | `C_CellTempDIV_Fault` | ✅ |
+| Bsa_FltCellIR_OV | 15.0 mΩ | (없는 기능) | ⛔ 미구현 |
+
+> ※ 미구현: `Bsa_FltOcTime_min`, `Bsa_FltUnbalPwr`, `Bsa_FltCharCellUt`(추후 구현), `Bsa_FltCellIR_OV`(없는 기능).
+> ※ VER15는 고객사 요구 미반영 시험 상태 — 통신에러(PackFcu_CANErr)를 Fault로 처리(차단). 양산 정책(Alarm/유지)은 VER16+ 분기.

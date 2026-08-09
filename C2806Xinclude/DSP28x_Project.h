@@ -211,15 +211,21 @@ struct SystemState_BIT
 };
 union SystemState_REG
 {
-   unsigned int     all;
+   unsigned long     all;
    struct Data_WORD        Word;
    struct SystemState_BIT bit;
 };
 struct SystemAlarm_BIT
 {       // bits   description
+
+    /*--------------------------------------------------------------
+     * 260807 : R9 명칭 일치 — PackVSOC_OV/UN → PackSOC_OV/UN (V 제거)
+     *--------------------------------------------------------------*/
+    //unsigned int     PackVSOC_OV         :1; // 1
+    //unsigned int     PackVSOC_UN         :1; // 2
     unsigned int     PackOC              :1; // 0
-    unsigned int     PackVSOC_OV         :1; // 1
-    unsigned int     PackVSOC_UN         :1; // 2
+    unsigned int     PackSOC_OV          :1; // 1  // TODO : [검증] 260807_Note1, 0.15 SOC 과충전(R9 SOC_OV)
+    unsigned int     PackSOC_UN          :1; // 2  // TODO : [검증] 260807_Note1, 0.15 SOC 과방전(R9 SOC_Un)
     unsigned int     PackVolt_OV         :1; // 3
     unsigned int     PackVolt_UN         :1; // 4
     unsigned int     PackTemp_OV         :1; // 5
@@ -231,8 +237,12 @@ struct SystemAlarm_BIT
     unsigned int     CellTemp_OV         :1; // 11
     unsigned int     CellTemp_UN         :1; // 12
     unsigned int     CellTemp_BL         :1; // 13
-    unsigned int     PackCAN_ERR         :1; // 14
-    unsigned int     Alarm15             :1; // 14
+    /*--------------------------------------------------------------
+     * 260807 : 통신에러 명칭 통일 — PackCAN_ERR → PackFcu_CANErr
+     *--------------------------------------------------------------*/
+    //unsigned int     PackCAN_ERR         :1; // 14
+    unsigned int     PackFcu_CANErr      :1; // 14  // TODO : [검증] 260807_Note1, 0.15 FCU CAN 통신 에러(경고)
+    unsigned int     Alarm15             :1; // 15
 };
 union SystemAlarm_REG
 {
@@ -241,9 +251,18 @@ union SystemAlarm_REG
 };
 struct SystemFault_BIT
 {       // bits   description
-    unsigned int     PackVCT_OV          :1; // 0
-    unsigned int     PackVSOC_OV         :1; // 1
-    unsigned int     PackVSOC_UN         :1; // 2
+    /*--------------------------------------------------------------
+     * 260807 : R9 명칭 일치 — PackVCT_OV → PackOC (과전류 보호, R9 @16 Prtct_OC)
+     *--------------------------------------------------------------*/
+    //unsigned int     PackVCT_OV          :1; // 0
+    /*--------------------------------------------------------------
+     * 260807 : R9 명칭 일치 — PackVSOC_OV/UN → PackSOC_OV/UN (V 제거)
+     *--------------------------------------------------------------*/
+    //unsigned int     PackVSOC_OV         :1; // 1
+    //unsigned int     PackVSOC_UN         :1; // 2
+    unsigned int     PackOC              :1; // 0  // TODO : [검증] 260807_Note1, 0.15 과전류(R9 @16 Prtct_OC)
+    unsigned int     PackSOC_OV          :1; // 1  // TODO : [검증] 260807_Note1, 0.15 SOC 과충전(R9 SOC_OV)
+    unsigned int     PackSOC_UN          :1; // 2  // TODO : [검증] 260807_Note1, 0.15 SOC 과방전(R9 SOC_Un)
     unsigned int     PackVolt_OV         :1; // 3
     unsigned int     PackVolt_UN         :1; // 4
     unsigned int     PackTemp_OV         :1; // 5
@@ -256,22 +275,30 @@ struct SystemFault_BIT
     unsigned int     CellTemp_UN         :1; // 12
     unsigned int     CellTemp_BL         :1; // 13
     unsigned int     PackRLY_ERR         :1; // 14
-    unsigned int     Fault15             :1; // 15
+    unsigned int     PackFcu_CANErr      :1; // 15  // TODO : [검증] 260807_Note1, 0.15 FCU CAN 통신 에러(R9 @31 PrtctCanTmOut)
     unsigned int     CellIR_OV           :1; // 16
-    unsigned int     PackOcTime_Err      :1; // 16
-    unsigned int     PrtcOcEvent_Err     :1; // 16
+    unsigned int     PackOcTime_Err      :1; // 17
+    unsigned int     PrtcOcEvent_Err     :1; // 18
+    unsigned int     PackISO_ERR         :1; // 19  // TODO : [검증] 260807_Note1, 0.15 ISOSPI 통신 에러 — R9 미정의, 신규제품 대비 확장(CAN @35)
+    unsigned int     PackIMD_ERR         :1; // 20  // TODO : [검증] 260807_Note1, 0.15 IMD 절연저항 에러 — R9 미정의, 신규제품 대비 확장(CAN @36)
 };
 union SystemFault_REG
 {
-   unsigned int     all;
+   /*--------------------------------------------------------------
+    * 260807 : all 16bit→32bit(unsigned long) — 폴트 상위비트(bit16~20) SysFault 판정 포함
+    *          과전류 시간보호(PackOcTime_Err bit17) 차단 활성화 (의도)
+    *--------------------------------------------------------------*/
+   //unsigned int            all;
+   unsigned long            all;   // TODO : [검증] 260807_Note1, 0.15 폴트 all 32bit 확장
    struct Data_WORD        Word;
    struct SystemFault_BIT bit;
 };
 struct SystemProtect_BIT
 {       // bits   description
-    unsigned int     PackVCT_OV          :1; // 0
-    unsigned int     PackVSOC_OV         :1; // 1
-    unsigned int     PackVSOC_UN         :1; // 2
+    //unsigned int     PackVCT_OV          :1; // 0
+    unsigned int     PackOC              :1; // 0  // TODO : [검증] 260807_Note1, 0.15 과전류(명칭 일치)
+    unsigned int     PackSOC_OV         :1; // 1
+    unsigned int     PackSOC_UN         :1; // 2
     unsigned int     PackVolt_OV         :1; // 3
     unsigned int     PackVolt_UN         :1; // 4
     unsigned int     PackTemp_OV         :1; // 5
@@ -284,11 +311,23 @@ struct SystemProtect_BIT
     unsigned int     CellTemp_UN         :1; // 12
     unsigned int     CellTemp_BL         :1; // 13
     unsigned int     PackRLY_ERR         :1; // 14
-    unsigned int     PackISO_ERR         :1; // 15
+    /*--------------------------------------------------------------
+     * 260807 : R9 정합 — SystemFault_BIT와 동일 구성으로 확장
+     *          bit15 PackISO_ERR → PrtctCanTmOut, bit16~20 추가
+     *--------------------------------------------------------------*/
+    //unsigned int     PackISO_ERR         :1; // 15
+    unsigned int     PackFcu_CANErr      :1; // 15  // TODO : [검증] 260807_Note1, 0.15 FCU CAN 통신 에러(R9 @31 PrtctCanTmOut)
+    unsigned int     CellIR_OV           :1; // 16
+    unsigned int     PackOcTime_Err      :1; // 17
+    unsigned int     PrtcOcEvent_Err     :1; // 18
+    unsigned int     PackISO_ERR         :1; // 19
+    unsigned int     PackIMD_ERR         :1; // 20
 };
 union SystemProtect_REG
 {
-   unsigned int     all;
+   //unsigned int            all;
+   unsigned long            all;   // TODO : [검증] 260807_Note1, 0.15 all 32bit 확장(Fault와 동일 구성)
+   struct Data_WORD        Word;
    struct SystemProtect_BIT bit;
 };
 struct Current_byte
@@ -569,7 +608,7 @@ typedef struct CANA_DATA
     Uint16 CANTxC;
     Uint16 CANTxD;
     Uint16 CANTxE;
-    Uint16 AlarmNum;
+    //Uint16 AlarmNum;   // TODO : [삭제] 260808_Note1, 0.15 미사용(write-only) 제거 예정
 
 
 
@@ -672,9 +711,51 @@ typedef struct CANA_DATA
     Uint16 MailBox2RxCount;
     Uint16 MailBox3RxCount;
 //  Uint16 CANID;
-
-
-
 }CANAReg;
+
+#if DebugBoardMode != 0
+struct DbgFrame_BIT                       // TODOS 260726_Note1, 0.14 모사장치 프레임 수신표시 비트
+{       // bits   description
+   unsigned int     Frame01         :1; // 0  : 0x401(volt) / 0x407(temp)
+   unsigned int     Frame02         :1; // 1  : 0x402       / 0x408
+   unsigned int     Frame03         :1; // 2  : 0x403       / 0x409
+   unsigned int     Frame04         :1; // 3  : 0x404       / 0x40A
+   unsigned int     Frame05         :1; // 4  : 0x405       / 0x40B
+   unsigned int     Frame06         :1; // 5  : 0x406       / 0x40C
+   unsigned int     Rsvd06          :1; // 6
+   unsigned int     Rsvd07          :1; // 7
+   unsigned int     Rsvd08          :1; // 8
+   unsigned int     Rsvd09          :1; // 9
+   unsigned int     Rsvd10          :1; // 10
+   unsigned int     Rsvd11          :1; // 11
+   unsigned int     Rsvd12          :1; // 12
+   unsigned int     Rsvd13          :1; // 13
+   unsigned int     Rsvd14          :1; // 14
+   unsigned int     Rsvd15          :1; // 15
+};
+union DbgFrame_REG
+{
+   unsigned int     all;                 // 0x003F : all frames received
+   struct DbgFrame_BIT bit;
+};
+typedef struct                            // TODOS 260726_Note1, 0.14 모사장치 셀전압·온도 CAN 수신 구조체
+{
+    /*
+     * cell voltage from 0x401~0x406 (4 cells per frame, mV unsigned LSB)
+     * cell temperature from 0x407~0x40C (4 channels per frame, 0.1degC signed LSB)
+     * CellVolt/CellTemp : raw value stored in CAN RX ISR
+     * CellVoltF/CellTempF : scaled value, converted in main loop
+     */
+    Uint16  CellVolt[Sys80VCellVoltCount];
+    int16   CellTemp[Sys80VCellTempCount];
+    float32 CellVoltF[Sys80VCellVoltCount];
+    float32 CellTempF[Sys80VCellTempCount];
+    union DbgFrame_REG VoltFlag;
+    union DbgFrame_REG TempFlag;
+    Uint16  VoltCnt;
+    Uint16  TempCnt;
+}DbgReg;
+#endif
+
 #endif  // end of DSP28x_PROJECT_H definition
 

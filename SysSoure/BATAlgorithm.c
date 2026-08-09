@@ -369,7 +369,6 @@ void CalSocHandle(SocReg *P)
     {
         P->SysAhF = -C_SocAvailableCapacityAh;
     }
-
     P->SysSOCBufF1 = P->SysAhF * C_SocNorm;
     P->SysSOCBufF2 = P->SysSOCBufF1 * 100.0F;
     P->SysSOCF     = P->SysSocInitF + P->SysSOCBufF2;
@@ -382,7 +381,6 @@ void CalSocHandle(SocReg *P)
     {
         P->SysSOCF = 0.0F;
     }
-
     /* 계산 방식: 항상 Coulomb Counting (운용 중 OCV 재보정 미사용) */
     P->SoCStateRegs.bit.CalMeth = 1u;
 }

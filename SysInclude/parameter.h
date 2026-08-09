@@ -67,7 +67,7 @@ Note: In this software, the default inverter is supposed to be DMC1500 board.
 #define UL_BYTE(x)		    (x >> 16)
 #define HI_BYTE(x)		    (x >> 8)
 #define LO_BYTE(x)          (x & 0xff)
-#define MAKE_WORD(msb,lsb)	((msb<<8) | (lsb))
+#define MAKE_WORD(msb,lsb)	 ((msb<<8) | (lsb))
 #define WordLShift(md,ml)   (md<<ml)
 #define WordRShift(md,ml)   (md>>ml)
 
@@ -230,11 +230,11 @@ Note: In this software, the default inverter is supposed to be DMC1500 board.
 #define CellVoltsampling100msec 100
 
 /*-------------------------------------------------------------------------------
- TMS320F28335 CLK SET UP 
+ TMS320F28069 CLK SET UP 
 -------------------------------------------------------------------------------*/
 #define	CPUCLK				    80000000L							// CPU Main Clock
 /*-------------------------------------------------------------------------------
- TMS320F28335 CLK SET UP 
+ TMS320F28069 CLK SET UP 
 -------------------------------------------------------------------------------*/
 #define	SCIA_LSPCLK				(CPUCLK/4)							// Peripheral Low Speed Clock for SCI-A
 #define	SCIA_BAUDRATE			9600L								// SCI-A Baudrate
@@ -294,7 +294,13 @@ Parameter
 #define     Product_Voltage                    768  // 3.664*22
 #define     Product_Capacity                   450  //
 #define     Product_Type                       0    // TODOS 26.07.02 TEST 버전0, 양상버전 1 
-#define     Product_Version                    14   // TODOS 26.07.02 TEST 버전 관리
+#define     Product_Version                    15   // TODOS 26.07.02 TEST 버전 관리
+#define     DebugBoardMode                     1    // TODOS 260726_Note1, 0.14 디버깅보드 시험모드 (0:실기 isoSPI, 1이상:모사장치 CAN, 양산빌드 반드시 0)
+
+#if (DebugBoardMode != 0) && (Product_Type == 1)
+#error "DebugBoardMode must be 0 when Product_Type=1 (production build)"
+#endif
+
 #define     Bat80VSysVoltMax                 924 //4.2*22
 #define     Bat80VSysVoltMin                 616  //2.8*22
 
@@ -356,18 +362,25 @@ Parameter
 #define     C_CANCount                                     50
 #define     C_RleyCount                                    1
 // TODO(PrtotectSet2605030 반영, 검증 후 정리): Protect 임계값을 엑셀 설정값과 일치. 주석=이전값.
-#define     C_PackCTOV_Fault        500.0   //26.05.30기준 500A (이전506.0)
+//#define     C_PackCTOV_Fault        500.0   //26.05.30기준 500A (이전506.0)
+#define     C_PackCTOV_Fault        505.0   // TODO : [튜닝] 260809_Note1, 0.15 FltOc 505A(표반영)
 #define     C_PackOCTimer_Fault     480.0   //26.05.30기준 480A (이전500.0) OC타이머 전류임계
 #define     C_PackOCTimerCount      1000    //26.05.30기준 1sec (480A 1sec 유지) ※루프1ms 기준
-#define     C_PackSOCOV_Fault       101.0   //26.05.30기준 101%
-#define     C_PackSOCUN_Fault       -0.1    //26.05.30기준 -0.1%
+//#define     C_PackSOCOV_Fault       101.0   //26.05.30기준 101%
+//#define     C_PackSOCUN_Fault       -0.1    //26.05.30기준 -0.1%
+#define     C_PackSOCOV_Fault       100.0   // TODO : [튜닝] 260809_Note1, 0.15 FltctSocH 100%(표반영)
+#define     C_PackSOCUN_Fault       0.0     // TODO : [튜닝] 260809_Note1, 0.15 FltctSocL 0%(표반영)
 #define     C_PackVoltOV_Fault      91.3    //26.05.30기준 91.3V (이전102.4)
-#define     C_PackVoltUN_Fault      61.6    //26.05.30기준 61.6V (이전67.2)
+//#define     C_PackVoltUN_Fault      61.6    //26.05.30기준 61.6V (이전67.2)
+#define     C_PackVoltUN_Fault      62.7    // TODO : [튜닝] 260809_Note1, 0.15 FltUv 62.7V(표반영)
 #define     C_PackTempOV_Fault      52.0    //26.05.30기준 52도 (이전60.0)
 #define     C_PackTempUN_Fault      -35.0   //26.05.30기준 -35도 (이전-30.0)
-#define     C_CellVoltOV_Fault      4.15    //26.05.30기준 4.15V (이전4.27)
-#define     C_CellVoltUN_Fault      2.8     //26.05.30기준 2.8V (이전2.75)
-#define     C_CellVoltDIV_Fault     0.5     //26.05.30기준 500mV
+//#define     C_CellVoltOV_Fault      4.15    //26.05.30기준 4.15V (이전4.27)
+//#define     C_CellVoltUN_Fault      2.8     //26.05.30기준 2.8V (이전2.75)
+//#define     C_CellVoltDIV_Fault     0.5     //26.05.30기준 500mV
+#define     C_CellVoltOV_Fault      4.20    // TODO : [튜닝] 260809_Note1, 0.15 FltCellOv 4.20V(표반영)
+#define     C_CellVoltUN_Fault      2.85    // TODO : [튜닝] 260809_Note1, 0.15 FltCellUv 2.85V(표반영)
+#define     C_CellVoltDIV_Fault     0.35    // TODO : [튜닝] 260809_Note1, 0.15 FltCellUnbalVlt 350mV(표반영)
 #define     C_CellTempOV_Fault      60.0    //26.05.30기준 60도
 #define     C_CellTempUN_Fault      -30.0   //26.05.30기준 -30도 (이전-25.0)
 #define     C_CellTempDIV_Fault     10.0    //26.05.30기준 10도 (이전15.0)
@@ -392,20 +405,31 @@ Parameter
 // 26.05.30기준 PrtotectSet2605030 의 Wrn 항목. _Warn=Trigger, _WarnRst=Release(히스테리시스)
 #define     C_PackCTOV_Warn                                450.0  //26.05.30기준 WrnOC 450A
 #define     C_PackCTOV_WarnRst                             405.0  //26.05.30기준 release 405A
-#define     C_PackSOCOV_Warn                               100.0  //26.05.30기준 WrnSocH 100%
-#define     C_PackSOCOV_WarnRst                            97.0   //26.05.30기준 release 97%
+/*--------------------------------------------------------------
+ * 260809 : WrnSocH 경고 임계 조정 — 100→95%, 해제 97→92.15%(3% 히스)
+ *--------------------------------------------------------------*/
+//#define     C_PackSOCOV_Warn                               100.0  //26.05.30기준 WrnSocH 100%
+//#define     C_PackSOCOV_WarnRst                            97.0   //26.05.30기준 release 97%
+#define     C_PackSOCOV_Warn                               95.0   // TODO : [튜닝] 260809_Note1, 0.15 WrnSocH 95% 이상
+#define     C_PackSOCOV_WarnRst                            92.2   // TODO : [튜닝] 260809_Note1, 0.15 해제 92.2%(소수1, 표반영)
 #define     C_PackSOCUN_Warn                               5.0    //26.05.30기준 WrnSocL 5%
 #define     C_PackSOCUN_WarnRst                            5.25   //26.05.30기준 release 5.25%
-#define     C_PackVoltOV_Warn                              90.2   //26.05.30기준 WrnOv 90.2V
-#define     C_PackVoltOV_WarnRst                           87.494 //26.05.30기준 release 87.494V
+//#define     C_PackVoltOV_Warn                              90.2   //26.05.30기준 WrnOv 90.2V
+//#define     C_PackVoltOV_WarnRst                           87.494 //26.05.30기준 release 87.494V
+#define     C_PackVoltOV_Warn                              90.9   // TODO : [튜닝] 260809_Note1, 0.15 WrnOv 90.9V(소수1, 표반영)
+#define     C_PackVoltOV_WarnRst                           88.1   // TODO : [튜닝] 260809_Note1, 0.15 해제 88.1V(소수1)
 #define     C_PackVoltUN_Warn                              66.0   //26.05.30기준 WrnUv 66V
 #define     C_PackVoltUN_WarnRst                           69.3   //26.05.30기준 release 69.3V
 #define     C_PackTempOV_Warn                              47.0   //26.05.30기준 WrnOt 47도
-#define     C_PackTempOV_WarnRst                           44.65  //26.05.30기준 release 44.65도
+//#define     C_PackTempOV_WarnRst                           44.65  //26.05.30기준 release 44.65도
+#define     C_PackTempOV_WarnRst                           44.7   // TODO : [튜닝] 260809_Note1, 0.15 해제 44.7도(소수1)
 #define     C_PackTempUN_Warn                             -25.0   //26.05.30기준 WrnUt -25도
-#define     C_PackTempUN_WarnRst                           0.0    //26.05.30기준 release 0도
-#define     C_CellVoltOV_Warn                              4.10   //26.05.30기준 WrnCellOv 4.1V
-#define     C_CellVoltOV_WarnRst                           4.0795 //26.05.30기준 release 4.0795V
+//#define     C_PackTempUN_WarnRst                           0.0    //26.05.30기준 release 0도
+#define     C_PackTempUN_WarnRst                          -23.8   // TODO : [튜닝] 260809_Note1, 0.15 WrnUt 해제 -23.8도(소수1, 표반영)
+//#define     C_CellVoltOV_Warn                              4.10   //26.05.30기준 WrnCellOv 4.1V
+//#define     C_CellVoltOV_WarnRst                           4.0795 //26.05.30기준 release 4.0795V
+#define     C_CellVoltOV_Warn                              4.15   // TODO : [튜닝] 260809_Note1, 0.15 WrnCellOv 4.15V(표반영)
+#define     C_CellVoltOV_WarnRst                           4.129  // TODO : [튜닝] 260809_Note1, 0.15 해제 4.129V(소수3)
 #define     C_CellVoltUN_Warn                              3.00   //26.05.30기준 WrnCellUv 3.0V
 #define     C_CellVoltUN_WarnRst                           3.015  //26.05.30기준 release 3.015V
 #define     C_CellVoltDIV_Warn                             0.2    //26.05.30기준 WrnCellUnbalV 200mV
@@ -414,11 +438,14 @@ Parameter
  *          해제가 안 돼 알람이 latch됨 → 히스테리시스 밴드 축소)
  *--------------------------------------------------------------*/
 //#define     C_CellVoltDIV_WarnRst                          0.02   //26.05.30기준 release 20mV
-#define     C_CellVoltDIV_WarnRst                          0.1    // TODO : [튜닝] 260716_Note1, 0.12 셀전압편차 알람 해제 100mV (기존 20mV→100mV)
+//#define     C_CellVoltDIV_WarnRst                          0.1    // TODO : [튜닝] 260716_Note1, 0.12 셀전압편차 알람 해제 100mV (기존 20mV→100mV)
+#define     C_CellVoltDIV_WarnRst                          0.067  // TODO : [튜닝] 260809_Note1, 0.15 해제 67mV(표반영)
 #define     C_CellTempOV_Warn                              55.0   //26.05.30기준 WrnCellOt 55도
-#define     C_CellTempOV_WarnRst                           52.25  //26.05.30기준 release 52.25도
+//#define     C_CellTempOV_WarnRst                           52.25  //26.05.30기준 release 52.25도
+#define     C_CellTempOV_WarnRst                           52.3   // TODO : [튜닝] 260809_Note1, 0.15 해제 52.3도(소수1)
 #define     C_CellTempUN_Warn                             -20.0   //26.05.30기준 WrnCellUt -20도
-#define     C_CellTempUN_WarnRst                           0.0    //26.05.30기준 release 0도
+//#define     C_CellTempUN_WarnRst                           0.0    //26.05.30기준 release 0도
+#define     C_CellTempUN_WarnRst                          -19.0   // TODO : [튜닝] 260809_Note1, 0.15 WrnCellUt 해제 -19.0도(표반영)
 #define     C_CellTempDIV_Warn                             10.0   //26.05.30기준 WrnCellUnbalTmp 10도
 #define     C_CellTempDIV_WarnRst                          5.0    //26.05.30기준 release 5도
 
