@@ -179,6 +179,7 @@ void SysVarINIT(SystemReg *s)
     s->Bat80VCellMinTemperatureF=0;
     s->Bat80VCellDivTemperatureF=0;
     s->Bat80VCellAgvTemperatureF=0;
+    s->Bat80VBATICTemperatureF = 0;   // TODO : [검증] 260901_Note1, 0.17 R12 BATIC 온도 초기화
     /*--------------------------------------------------------------
      * 260827 : 충/방전 허용전류 4종 — 단위 A. 초기값 5 → 0 으로 변경.
      *          5 는 단위가 kW 이던 시절의 잔재로 A 기준에서는 의미가 없다.
@@ -253,6 +254,7 @@ void SysVarINIT(SystemReg *s)
 void CANRegVarINIT(CANAReg *P)
 {
     P->SWTypeVer=0;
+    P->BATIC_Temp = 0;   // TODO : [검증] 260901_Note1, 0.17 R12 BATIC_Temp 초기화
     /*
      *
      */

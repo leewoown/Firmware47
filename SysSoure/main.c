@@ -795,8 +795,11 @@ void main(void)
 
             delay_ms(1);
             SysRegs.CellTempssampling=0;
-           Slave1Regs.BatICTempsF = Slave1Temps;
-           LTC6804_DieTemperatureRead(BMS_ID_1, &Slave1Temps);
+            // 
+            //Slave1Regs.BatICTempsF = Slave1Temps;   // [주석] 260901_Note1 요청 주석 처리 (구 798행)
+            SysRegs.Bat80VBATICTemperatureF = Slave1Regs.BatICTempsF;              // TODO : [검증] 260901_Note1, 0.17 R12 BATIC 내부온도
+            CANARegs.BATIC_Temp = (int16)(SysRegs.Bat80VBATICTemperatureF * 10);   // TODO : [검증] 260901_Note1, 0.17 R12 0x609 0.1℃ factor
+            LTC6804_DieTemperatureRead(BMS_ID_1, &Slave1Temps);
 #endif
         }
         if((NVRAllRegs.SEQTimeTick>100)&&(SysRegs.BAT80VStateReg.bit.INITOK==1))
@@ -1071,7 +1074,8 @@ interrupt void cpu_timer0_isr(void)
                 }
                //SysRegs.BAT80VStateReg.bit.SysSTATE           = Slave1Regs.StateMachine;
                CANARegs.BAT80VStatus.bit.BalanceEN           = SysRegs.BAT80VStateReg.bit.BalanceMode;
-               CANARegs.BAT80VDigitalOutPutReg.bit.NRlyOUT   = PrtectRelayRegs.State.bit.NRelayDO;
+               //CANARegs.BAT80VDigitalOutPutReg.bit.NRlyOUT   = PrtectRelayRegs.State.bit.NRelayDO;
+               CANARegs.BAT80VDigitalOutPutReg.bit.NRlyOUT   = 1;   // TODO : [검증] 260901_Note1, 0.17 R13 Neg_Rly 직결(N릴레이 물리제거) 항상 1(Close) 고정
                CANARegs.BAT80VDigitalOutPutReg.bit.CHARlyOUT = PrtectRelayRegs.State.bit.PreRelayDO;
                CANARegs.BAT80VDigitalOutPutReg.bit.PRlyOUT   = PrtectRelayRegs.State.bit.PRelayDO;
                CANARegs.BAT80VAh                             = (int)(Farasis56AhSocRegs.SysAhF*10);
@@ -1079,7 +1083,11 @@ interrupt void cpu_timer0_isr(void)
                SysRegs.BAT80VStateReg.bit.SysSTATE           = SysRegs.SysMachine;   // TODO : [검증] 260808_Note1, 0.16 상태머신 보고(Init/Ready/Running/Protecter)
                if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                {
-                 CANATX(0x602,8,CANARegs.BAT80VStatus.all,CANARegs.BAT80VDigitalOutPutReg.all,CANARegs.BAT80VAh,SysRegs.BAT80VStateReg.all);
+                 /*--------------------------------------------------------------
+                  * 260901 : 0x602 D3 R13 반영 — StateReg → BATIC_Temp(bit48, signed 0.1℃)
+                  *--------------------------------------------------------------*/
+                 //CANATX(0x602,8,CANARegs.BAT80VStatus.all,CANARegs.BAT80VDigitalOutPutReg.all,CANARegs.BAT80VAh,SysRegs.BAT80VStateReg.all);
+                 CANATX(0x602,8,CANARegs.BAT80VStatus.all,CANARegs.BAT80VDigitalOutPutReg.all,CANARegs.BAT80VAh,CANARegs.BATIC_Temp);   // TODO : [검증] 260901_Note1, 0.17 R13 0x602 D3=BATIC_Temp
                } 
        default :
        break;
@@ -1281,10 +1289,20 @@ interrupt void cpu_timer0_isr(void)
                     {
                         Slave2Regs.ErrorCount=0;
                     }
-                    CANARegs.CANTxA = ComBine(CANARegs.MailBox0RxCount,CANARegs.MailBoxRxCount);    // TODO : [검증] 260808_Note1, 0.15 CAN RX 전체, 전류센서 카운터
-                    CANARegs.CANTxB = ComBine(SysRegs.SysCanRxCount,CANARegs.MailBox2RxCount);      // TODO : [검증] 260808_Note1, 0.15 CAN FCU 카운터,SysRegs.SysCanRxCount(리셋 카운터값)
-                    CANARegs.CANTxC = ComBine(Slave2Regs.ErrorCount,Slave1Regs.ErrorCount);         // TODO : [검증] 260808_Note1, 0.15 Slave2,Slave1 에러 카운터
-                    CANARegs.CANTxD = 0;
+                    /*--------------------------------------------------------------
+                     * 260901 : 0x608 카운터 배치 R13 정합 — 16bit×3 + 8bit×2 (byte 단위)
+                     *   byte0~1 CANRxCount(전체) / byte2~3 CT_RxCount(전류센서 0x3C5) /
+                     *   byte4~5 VCU_RxCount(IFCU 0x450) / byte6 Slave1_Err / byte7 Slave2_Err
+                     *   ※ VCU_RxCount는 MailBox2RxCount(0~200)로 — SysCanRxCount(11000) 248 이슈 해소
+                     *--------------------------------------------------------------*/
+                    //CANARegs.CANTxA = ComBine(CANARegs.MailBox0RxCount,CANARegs.MailBoxRxCount);
+                    //CANARegs.CANTxB = ComBine(SysRegs.SysCanRxCount,CANARegs.MailBox2RxCount);
+                    //CANARegs.CANTxC = ComBine(Slave2Regs.ErrorCount,Slave1Regs.ErrorCount);
+                    //CANARegs.CANTxD = 0;
+                    CANARegs.CANTxA = CANARegs.MailBoxRxCount;                                // TODO : [검증] 260901_Note1, 0.17 R13 byte0~1(16bit) CANRxCount(전체 CAN Rx)
+                    CANARegs.CANTxB = CANARegs.MailBox0RxCount;                               // TODO : [검증] 260901_Note1, 0.17 R13 byte2~3(16bit) CT_RxCount(전류센서 0x3C5)
+                    CANARegs.CANTxC = CANARegs.MailBox2RxCount;                               // TODO : [검증] 260901_Note1, 0.17 R13 byte4~5(16bit) VCU_RxCount(IFCU 0x450, 0~200)
+                    CANARegs.CANTxD = ComBine(Slave2Regs.ErrorCount,Slave1Regs.ErrorCount);   // TODO : [검증] 260809_Note1, 0.16 byte6 Slave1_Err, byte7 Slave2_Err
                     CANATX(0x608,8,CANARegs.CANTxA,CANARegs.CANTxB,CANARegs.CANTxC, CANARegs.CANTxD);
                     /*--------------------------------------------------------------
                      * 260808 : AlarmNum 미사용(write-only) 제거 예정
@@ -1303,21 +1321,48 @@ interrupt void cpu_timer0_isr(void)
                if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                {
                    /*--------------------------------------------------------------
-                    * 260715 : 0x609 셀전압 송신 버그 수정 (22셀 순환 전송)
-                    *   - 읽기 인덱스가 온도용 CellIRTxNum 공유 → 전용 CellVoltTxNum 사용
-                    *   - 인덱스 증가(+=3) 누락 보완, 리셋 변수 CellIRTxNum → CellVoltTxNum
+                    * 260901 : 0x609 R12 반영 — 셀전압 순환 → BMS_BATIC_Temp(팩 내부온도)
+                    *          D0=BATIC_Temp(0.1℃, signed), D1~D3=0(Debugging1 예약)
+                    *          셀전압 개별값은 0x60A CellMux로 이관 예정(변수 보존)
                     *--------------------------------------------------------------*/
-                   //CANARegs.CellVoltTxA = CANARegs.BAT80VoltageCell[CANARegs.CellIRTxNum+0];
-                   //CANARegs.CellVoltTxB = CANARegs.BAT80VoltageCell[CANARegs.CellIRTxNum+1];
-                   //CANARegs.CellVoltTxC = CANARegs.BAT80VoltageCell[CANARegs.CellIRTxNum+2];
-                   CANARegs.CellVoltTxA = (CANARegs.CellVoltTxNum+0<22) ? CANARegs.BAT80VoltageCell[CANARegs.CellVoltTxNum+0] : 0;   // TODO : [검증] 260715_Note1, 0.11 22셀 전압 0x609 송신
-                   CANARegs.CellVoltTxB = (CANARegs.CellVoltTxNum+1<22) ? CANARegs.BAT80VoltageCell[CANARegs.CellVoltTxNum+1] : 0;
-                   CANARegs.CellVoltTxC = (CANARegs.CellVoltTxNum+2<22) ? CANARegs.BAT80VoltageCell[CANARegs.CellVoltTxNum+2] : 0;
-                   CANATX(0x609,8,CANARegs.CellVoltTxNum,CANARegs.CellVoltTxA ,CANARegs.CellVoltTxB, CANARegs.CellVoltTxC );
-                   CANARegs.CellVoltTxNum +=3;
-                   if(CANARegs.CellVoltTxNum>=22)
+                   //CANARegs.CellVoltTxA = (CANARegs.CellVoltTxNum+0<22) ? CANARegs.BAT80VoltageCell[CANARegs.CellVoltTxNum+0] : 0;   // TODO : [검증] 260715_Note1, 0.11 22셀 전압 0x609 송신
+                   //CANARegs.CellVoltTxB = (CANARegs.CellVoltTxNum+1<22) ? CANARegs.BAT80VoltageCell[CANARegs.CellVoltTxNum+1] : 0;
+                   //CANARegs.CellVoltTxC = (CANARegs.CellVoltTxNum+2<22) ? CANARegs.BAT80VoltageCell[CANARegs.CellVoltTxNum+2] : 0;
+                   //CANATX(0x609,8,CANARegs.CellVoltTxNum,CANARegs.CellVoltTxA ,CANARegs.CellVoltTxB, CANARegs.CellVoltTxC );
+                   //CANARegs.CellVoltTxNum +=3;
+                   //if(CANARegs.CellVoltTxNum>=22)
+                   //{
+                   //    CANARegs.CellVoltTxNum =0;
+                   //}
+                   /*--------------------------------------------------------------
+                    * 260901 : 0x609 R13 CellMux 통합 — Mux0~7 셀전압, Mux8~15 셀온도
+                    *          byte0=Mux, byte1~2=A, byte3~4=B, byte5~6=C (셀=(Mux%8)*3+slot)
+                    *          22셀이라 Mux7/15 slotC(#23) 미사용(0). BATIC_Temp는 0x602 D3로 이동.
+                    *          Mux 카운터는 CellVoltTxNum(0~15) 재활용.
+                    *--------------------------------------------------------------*/
+                   //CANATX(0x609,8,CANARegs.BATIC_Temp,0x0000,0x0000,0x0000);   // TODO : 260901_Note1, 0.17 R12 (BATIC_Temp→0x602 D3 이동)
                    {
-                       CANARegs.CellVoltTxNum =0;
+                       int16  celA, celB, celC;
+                       Uint16 base = (CANARegs.CellVoltTxNum & 0x0007) * 3;
+                       if(CANARegs.CellVoltTxNum < 8)   /* Mux0~7 : cell voltage  */
+                       {
+                           celA = (base+0<22) ? (int16)CANARegs.BAT80VoltageCell[base+0] : 0;
+                           celB = (base+1<22) ? (int16)CANARegs.BAT80VoltageCell[base+1] : 0;
+                           celC = (base+2<22) ? (int16)CANARegs.BAT80VoltageCell[base+2] : 0;
+                       }
+                       else                              /* Mux8~15: cell temperature */
+                       {
+                           celA = (base+0<22) ? (int16)CANARegs.BAT80VTemperatureCell[base+0] : 0;
+                           celB = (base+1<22) ? (int16)CANARegs.BAT80VTemperatureCell[base+1] : 0;
+                           celC = (base+2<22) ? (int16)CANARegs.BAT80VTemperatureCell[base+2] : 0;
+                       }
+                       CANATX(0x609,8,
+                              (Uint16)((CANARegs.CellVoltTxNum & 0x00FF) | ((celA & 0x00FF) << 8)),   /* byte0=Mux, byte1=A_L */
+                              (Uint16)(((celA >> 8) & 0x00FF) | ((celB & 0x00FF) << 8)),              /* byte2=A_H, byte3=B_L */
+                              (Uint16)(((celB >> 8) & 0x00FF) | ((celC & 0x00FF) << 8)),              /* byte4=B_H, byte5=C_L */
+                              (Uint16)( ((celC >> 8) & 0x00FF)) );   // TODO : [검증] 260901_Note1, 0.17 R13 0x609 CellMux 통합(byte6=C_H, byte7=0)
+                       CANARegs.CellVoltTxNum++;
+                       if(CANARegs.CellVoltTxNum >= 16){ CANARegs.CellVoltTxNum = 0; }
                    }
                }
        break;
@@ -1349,15 +1394,20 @@ interrupt void cpu_timer0_isr(void)
                 if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                 {
 
-                    CANARegs.CellTempsTxA = (CANARegs.CellTempsTxNum+0<22) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellTempsTxNum+0] : 0;
-                    CANARegs.CellTempsTxB = (CANARegs.CellTempsTxNum+1<22) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellTempsTxNum+1] : 0;
-                    CANARegs.CellTempsTxC = (CANARegs.CellTempsTxNum+2<22) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellTempsTxNum+2] : 0;
-                    CANATX(0x60A,8,CANARegs.CellTempsTxNum,CANARegs.CellTempsTxA ,CANARegs.CellTempsTxB, CANARegs.CellTempsTxC);
-                    CANARegs.CellTempsTxNum +=3;
-                    if(CANARegs.CellTempsTxNum>=22)
-                    {
-                        CANARegs.CellTempsTxNum =0;
-                    }
+                    /*--------------------------------------------------------------
+                     * 260901 : 0x60A R13 — 셀온도 CellMux 폐지(0x609로 통합),
+                     *          BMS_Debugging1 64bit 예약(전 바이트 0)
+                     *--------------------------------------------------------------*/
+                    //CANARegs.CellTempsTxA = (CANARegs.CellTempsTxNum+0<22) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellTempsTxNum+0] : 0;
+                    //CANARegs.CellTempsTxB = (CANARegs.CellTempsTxNum+1<22) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellTempsTxNum+1] : 0;
+                    //CANARegs.CellTempsTxC = (CANARegs.CellTempsTxNum+2<22) ? CANARegs.BAT80VTemperatureCell[CANARegs.CellTempsTxNum+2] : 0;
+                    //CANATX(0x60A,8,(8 + CANARegs.CellTempsTxNum/3),CANARegs.CellTempsTxA ,CANARegs.CellTempsTxB, CANARegs.CellTempsTxC);
+                    //CANARegs.CellTempsTxNum +=3;
+                    //if(CANARegs.CellTempsTxNum>=22)
+                    //{
+                    //    CANARegs.CellTempsTxNum =0;
+                    //}
+                    CANATX(0x60A,8,0x0000,0x0000,0x0000,0x0000);   // TODO : [검증] 260901_Note1, 0.17 R13 0x60A Debugging1 예약(0)
                 }
        break;
        case 55 :

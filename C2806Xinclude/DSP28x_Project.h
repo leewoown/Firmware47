@@ -420,6 +420,7 @@ typedef struct System_Date
     float32 Bat80VCellMinTemperatureF;
     float32 Bat80VCellDivTemperatureF;
     float32 Bat80VCellAgvTemperatureF;
+    float32 Bat80VBATICTemperatureF;   // TODO : [검증] 260901_Note1, 0.17 R12 BATIC 내부온도(℃)
     Uint16  Bat80TemperatureMaxNum;
     Uint16  Bat80TemperatureMinNum;
     float32 Bat80VCHAContintyCurrF;
@@ -633,6 +634,8 @@ typedef struct CANA_DATA
     Uint16 CellIRTxA;
     Uint16 CellIRTxB;
     Uint16 CellIRTxC;
+
+    int16  BATIC_Temp;   // TODO : [검증] 260901_Note1, 0.17 R12 0x609 BATIC 내부온도(0.1℃)
 
     Uint16 CANTxA;
     Uint16 CANTxB;
