@@ -81,6 +81,9 @@ void CalFarasis52AhSocInit(SocReg *P)
 #endif
 #if FarasisP56Ah
     extern void CellP56AhSocInit  (SocReg *P);
+    //extern void  P56PackCurrentLimit(SystemReg *s);                                                                   // 260901: 시그니처 변경으로 폐지
+    extern void    CalP56CurrentLimit(SocReg *p);                                                                       // TODO : [검증] 260901_Note1, 0.19 P56 Safety Current Limit 산출(하단 정의)
+    extern float32 PackLimitLookupF(const float32 *Table, Uint16 TempIdx, float32 TempRate, Uint16 SocIdx, float32 SocRate); // TODO : [검증] 260901_Note1, 0.19 전류한계 표 bilinear 보간
     const OCVtoSOC_Point P56AhOCVTable[P56AH_OCV_TABLE_SIZE]= 
     {
         /* OCV(V)   SysSOC(%)  | 셀SOC  | DOD */
@@ -341,6 +344,28 @@ void CalSocRegsInit(SocReg *P)
     P->OcvAdjUsedF    = 0.0F;
     P->OcvAdjActive   = 0u;
     P->OcvAdjLimitFlag= 0u;
+
+    /*--------------------------------------------------------------
+     * 260901 : P56 안전 전류제한 I/O 초기화 (CalP56CurrentLimit 입출력).
+     *          첫 100ms 갱신 전 오판정 방지로 0 으로 둔다.
+     *--------------------------------------------------------------*/
+    P->Bat80VCellAgvTemperatureF = 0.0F;                      // TODO : [검증] 260901_Note1, 0.19 P56 입력: 셀 평균 온도
+    P->Bat80VSOCF                = 0.0F;                      // TODO : [검증] 260901_Note1, 0.19 P56 입력: 팩 SOC
+    P->Bat80VCurrentF            = 0.0F;                      // TODO : [검증] 260901_Note1, 0.19 P56 입력: 팩 전류
+    P->Bat80VCurrentAsbF         = 0.0F;                      // TODO : [검증] 260901_Note1, 0.19 P56 입력: 팩 전류 절대값
+    /*--------------------------------------------------------------
+     * 260902 : 한계 4종 초기값 0 → 5 로 변경. SysVarINIT 와 동일 기준
+     *          (CAN 0x604 초기값 충전 +5.0A / 방전 -5.0A).
+     *--------------------------------------------------------------*/
+    //P->Bat80VDisCHAPeakFCurrF    = 0.0F;                    // TODO : [검증] 260901_Note1, 0.19 P56 출력: 5s 방전 한계
+    //P->Bat80VCHAPeakFCurrF       = 0.0F;                    // TODO : [검증] 260901_Note1, 0.19 P56 출력: 5s 충전 한계
+    //P->Bat80VDisCHAContintyCurrF = 0.0F;                    // TODO : [검증] 260901_Note1, 0.19 P56 출력: 연속 방전 한계
+    //P->Bat80VCHAContintyCurrF    = 0.0F;                    // TODO : [검증] 260901_Note1, 0.19 P56 출력: 연속 충전 한계
+    P->Bat80VDisCHAPeakFCurrF    = 5.0F;                      // TODO : [검증] 260902_Note1, 0.19 P56 출력: 5s 방전 한계 초기 -5.0A(양수 크기)
+    P->Bat80VCHAPeakFCurrF       = 5.0F;                      // TODO : [검증] 260902_Note1, 0.19 P56 출력: 5s 충전 한계 초기 +5.0A
+    P->Bat80VDisCHAContintyCurrF = 5.0F;                      // TODO : [검증] 260902_Note1, 0.19 P56 출력: 연속 방전 한계 초기 -5.0A(양수 크기)
+    P->Bat80VCHAContintyCurrF    = 5.0F;                      // TODO : [검증] 260902_Note1, 0.19 P56 출력: 연속 충전 한계 초기 +5.0A
+    P->Bat80VUnbalCurrentF       = 0.0F;                      // TODO : [검증] 260901_Note1, 0.19 P56 출력: 연속한계 초과분
 }
 void CalSocHandle(SocReg *P)
 {
@@ -486,3 +511,228 @@ void CalSocHandle(SocReg *P)
 #endif
 }
 
+/*--------------------------------------------------------------
+ * 260901 : P56PackCurrentLimit(+PackLimitLookupF, 한계표)를 DSP28x_Project.c 에서 이동.
+ *          P56 셀 전용 → #if FarasisP56Ah 로 감쌈. // TODO : [검증] 260901_Note1, 0.19
+ *--------------------------------------------------------------*/
+#if FarasisP56Ah
+/*--------------------------------------------------------------
+ * 260827 : P56PackCurrentLimit 신규 — P56 Safety Current Limit 표를
+ *          [셀온도 x 셀SOC] 2차원 선형보간(bilinear)하여 팩 허용전류 산출.
+ *          출력 4종 : 5sec(Peak) 충/방전, 연속(Continuity) 충/방전. 단위 A.
+ *          근거 : 20260827_P56_Safety_Current_Limit_AI.md (R1)
+ *          260831 : 근거 문서 R3 로 갱신 — 20260831_P56_Safety_Current_Limit_R3.md.
+ *                   연속 충전 한계 표(10~50 degC)만 변경, 나머지 3개 표는 R1 과 동일.
+ *          - 22S1P 구성이라 셀 전류 = 팩 전류(병렬 1P).
+ *          - (260827 폐지) 표 SOC 축은 '셀SOC'. BMS SysSOC(0~100%)는
+ *            셀 10~90% 구간에 대응하므로 셀SOC = 10 + SysSOC*0.8 로 변환 후 조회.
+ *          - 표 SOC 축은 SysSOC(Bat80VSOCF) 를 그대로 사용한다.
+ *            Bat80VSOCF 는 이미 DOD 80%(C_SocAvailableCapacityAh 45Ah)가
+ *            반영된 값이므로 별도 셀SOC 환산을 하지 않는다.
+ *          - 표의 방전값은 음수지만 여기서는 크기(양수)로 저장.
+ *            (Cal80VSysAlarmtCheck 가 |I| 와 비교하기 때문)
+ *          - -30/-20/60도 행은 문서상 참고값(취소선)이나 실차 계측 편의를
+ *            위해 표에 그대로 포함. 표 범위 밖 온도는 양끝 행으로 클램프하며,
+ *            실제 차단은 팩온도 Fault(52도 / -35도)가 담당한다.
+ *          ※ 미검증 : 5sec 충전 480A(8.6C) 및 저온 충전값은 셀 제조사
+ *            확정 전까지 실차 적용 보류 대상(문서 '미검증 항목' 1,2).
+ *          ※ 단위 : 본 함수는 A 로 채운다. CAN 0x604 규약도 kW→A 로 변경.
+ *--------------------------------------------------------------*/
+#define C_PackLimitTempPoint     9        /* -30, -20, -10, 0, 10, 25, 40, 50, 60 degC */
+#define C_PackLimitSocPoint      11       /* 셀 SOC 0 ~ 100 %, 10 % 간격              */
+//260902 : 0A 정책 보류로 미사용(가드 주석과 함께 보류). 되살릴 때 주석 해제.
+//#define C_PackLimitUsableTempMinF  (-10.0F)  /* R3 Note2 이용온도 하한[degC] */
+//#define C_PackLimitUsableTempMaxF  ( 55.0F)  /* R3 Note2 이용온도 상한[degC] */
+
+const float32 PackLimitTempAxisF[C_PackLimitTempPoint] =
+{
+    -30.0F, -20.0F, -10.0F,   0.0F,  10.0F,  25.0F,  40.0F,  50.0F,  60.0F
+};
+const float32 PackLimitSocAxisF[C_PackLimitSocPoint] =
+{
+      0.0F,  10.0F,  20.0F,  30.0F,  40.0F,  50.0F,  60.0F,  70.0F,  80.0F,  90.0F, 100.0F
+};
+
+/* 5초 방전 한계 [A](크기) : 행 = 온도, 열 = 셀 SOC */
+const float32 PackDisChaPeakLimitF[C_PackLimitTempPoint][C_PackLimitSocPoint] =
+{
+    {  0.0F,   0.0F,   0.0F,  16.6F,  35.5F,  35.0F,  31.1F,  44.2F,  57.4F,  50.9F,  50.9F },   /* -30 degC */
+    {  0.0F,  15.3F,  58.7F,  83.0F, 106.4F, 105.0F, 108.9F, 103.2F, 114.9F, 101.8F, 101.8F },   /* -20 degC */
+    {  0.0F,  30.5F,  88.0F, 165.9F, 212.8F, 227.5F, 217.8F, 221.1F, 215.4F, 203.6F, 216.4F },   /* -10 degC */
+    {  0.0F,  61.1F, 161.3F, 232.3F, 283.7F, 297.5F, 295.6F, 294.7F, 301.5F, 292.7F, 292.7F },   /*   0 degC */
+    {  0.0F, 106.9F, 220.0F, 315.3F, 354.7F, 385.0F, 373.3F, 383.2F, 387.7F, 394.5F, 394.5F },   /*  10 degC */
+    {  0.0F, 168.0F, 308.0F, 448.0F, 500.0F, 500.0F, 500.0F, 500.0F, 500.0F, 500.0F, 500.0F },   /*  25 degC */
+    {  0.0F, 168.0F, 308.0F, 448.0F, 500.0F, 500.0F, 500.0F, 500.0F, 500.0F, 500.0F, 500.0F },   /*  40 degC */
+    {  0.0F, 168.0F, 308.0F, 448.0F, 500.0F, 500.0F, 500.0F, 500.0F, 500.0F, 500.0F, 500.0F },   /*  50 degC */
+    {  0.0F, 114.5F, 205.3F, 298.7F, 354.7F, 350.0F, 388.9F, 368.4F, 359.0F, 381.8F, 381.8F }    /*  60 degC */
+};
+/* 5초 충전 한계 [A] */
+const float32 PackChaPeakLimitF[C_PackLimitTempPoint][C_PackLimitSocPoint] =
+{
+    {   5.7F,   5.7F,   5.7F,   5.7F,   6.1F,   5.6F,   5.8F,   5.6F,   3.2F,   2.7F, 0.0F },    /* -30 degC */
+    {  22.9F,  22.9F,  22.9F,  22.9F,  18.3F,  16.9F,  17.5F,  11.1F,   4.8F,   5.4F, 0.0F },    /* -20 degC */
+    { 125.7F, 125.7F, 125.7F, 114.3F,  97.8F,  67.5F,  46.7F,  22.2F,  16.0F,  10.8F, 0.0F },    /* -10 degC */
+    { 228.6F, 228.6F, 228.6F, 205.7F, 195.6F, 135.0F, 116.7F,  66.7F,  32.0F,  18.0F, 0.0F },    /*   0 degC */
+    { 320.0F, 320.0F, 320.0F, 297.1F, 293.3F, 225.0F, 163.3F, 111.1F,  48.0F,  36.0F, 0.0F },    /*  10 degC */
+    { 480.0F, 480.0F, 480.0F, 480.0F, 440.0F, 360.0F, 280.0F, 200.0F,  96.0F,  72.0F, 0.0F },    /*  25 degC */
+    { 480.0F, 480.0F, 480.0F, 480.0F, 440.0F, 360.0F, 280.0F, 200.0F,  96.0F,  72.0F, 0.0F },    /*  40 degC */
+    { 480.0F, 480.0F, 480.0F, 480.0F, 440.0F, 360.0F, 280.0F, 200.0F,  96.0F,  72.0F, 0.0F },    /*  50 degC */
+    { 480.0F, 480.0F, 480.0F, 480.0F, 440.0F, 360.0F, 280.0F, 200.0F,  96.0F,  72.0F, 0.0F }     /*  60 degC */
+};
+/* 연속(120초 초과) 방전 한계 [A](크기) */
+const float32 PackDisChaContLimitF[C_PackLimitTempPoint][C_PackLimitSocPoint] =
+{
+    { 0.0F,   0.0F,   0.0F,   5.6F,   9.0F,   9.0F,  16.8F,  16.8F,  16.8F,  16.8F,  16.8F },    /* -30 degC */
+    { 0.0F,   9.0F,  22.4F,  33.6F,  33.6F,  33.6F,  33.6F,  33.6F,  33.6F,  33.6F,  33.6F },    /* -20 degC */
+    { 0.0F,  11.2F,  33.6F,  33.6F,  50.4F,  50.4F,  50.4F,  50.4F,  50.4F,  50.4F,  50.4F },    /* -10 degC */
+    { 0.0F,  67.2F,  84.0F,  84.0F,  84.0F,  84.0F,  84.0F,  84.0F,  84.0F,  84.0F,  84.0F },    /*   0 degC */
+    { 0.0F,  89.6F, 123.2F, 134.4F, 134.4F, 134.4F, 134.4F, 134.4F, 134.4F, 134.4F, 134.4F },    /*  10 degC */
+    { 0.0F,  67.2F, 123.2F, 168.0F, 168.0F, 168.0F, 201.6F, 201.6F, 201.6F, 201.6F, 201.6F },    /*  25 degC */
+    { 0.0F,  67.2F, 123.2F, 168.0F, 168.0F, 168.0F, 201.6F, 201.6F, 201.6F, 201.6F, 201.6F },    /*  40 degC */
+    { 0.0F,  67.2F,  84.0F,  84.0F,  84.0F,  84.0F,  84.0F,  84.0F,  84.0F,  84.0F,  84.0F },    /*  50 degC */
+    { 0.0F,  56.0F,  56.0F,  56.0F,  56.0F,  56.0F,  56.0F,  56.0F,  56.0F,  56.0F,  56.0F }     /*  60 degC */
+};
+/* 연속 충전 한계 [A] */
+const float32 PackChaContLimitF[C_PackLimitTempPoint][C_PackLimitSocPoint] =
+{
+    {   1.5F,   1.5F,   1.5F,   1.5F,   1.5F,   1.5F,   1.5F,   0.6F,   0.3F,   0.1F, 0.0F },    /* -30 degC */
+    {   2.8F,   2.8F,   2.8F,   2.8F,   2.8F,   2.8F,   2.8F,   0.9F,   0.6F,   0.3F, 0.0F },    /* -20 degC */
+    {  33.6F,  16.8F,  16.8F,   5.6F,   5.6F,   3.4F,   3.4F,   1.1F,   1.1F,   0.6F, 0.0F },    /* -10 degC */
+    {  56.0F,  33.6F,  33.6F,  11.2F,  11.2F,   5.6F,   5.6F,   2.8F,   2.8F,   1.1F, 0.0F },    /*   0 degC */
+    /*--------------------------------------------------------------
+     * 260831 : 문서 R3 반영 — 10~50 degC 구간 연속 충전 한계 상향.
+     *          SOC 50~70% = 1.3C(72.8A), SOC 0~40% 는 1.3C 이상을 유지해
+     *          SOC 증가에 따라 충전 한계가 단조감소하도록 정리.
+     *          근거 : 20260831_P56_Safety_Current_Limit_R3.md (Note 6)
+     *--------------------------------------------------------------*/
+    //{  84.0F,  84.0F,  84.0F,  39.2F,  39.2F,  28.0F,  28.0F,  28.0F,  28.0F,  28.0F, 0.0F },    /*  10 degC */
+    //{ 168.0F, 168.0F, 168.0F,  78.4F,  78.4F,  56.0F,  33.6F,  33.6F,  33.6F,  33.6F, 0.0F },    /*  25 degC */
+    //{ 201.6F, 201.6F, 201.6F, 201.6F, 179.2F, 134.4F,  89.6F,  67.2F,  67.2F,  67.2F, 0.0F },    /*  40 degC */
+    //{  56.0F,  56.0F,  56.0F,  56.0F,  56.0F,  56.0F,  33.6F,  33.6F,  33.6F,  33.6F, 0.0F },    /*  50 degC */
+    {  84.0F,  84.0F,  84.0F,  72.8F,  72.8F,  72.8F,  72.8F,  72.8F,  28.0F,  28.0F, 0.0F },    /*  10 degC */   // TODO : [검증] 260831_Note1, 0.18 R3 반영
+    { 168.0F, 168.0F, 168.0F,  78.4F,  78.4F,  72.8F,  72.8F,  72.8F,  33.6F,  33.6F, 0.0F },    /*  25 degC */   // TODO : [검증] 260831_Note1, 0.18 R3 반영
+    { 201.6F, 201.6F, 201.6F, 201.6F, 179.2F,  72.8F,  72.8F,  72.8F,  67.2F,  67.2F, 0.0F },    /*  40 degC */   // TODO : [검증] 260831_Note1, 0.18 R3 반영
+    {  72.8F,  72.8F,  72.8F,  72.8F,  72.8F,  72.8F,  72.8F,  72.8F,  33.6F,  33.6F, 0.0F },    /*  50 degC */   // TODO : [검증] 260831_Note1, 0.18 R3 반영
+    {   0.0F,   0.0F,   0.0F,   0.0F,   0.0F,   0.0F,   0.0F,   0.0F,   0.0F,   0.0F, 0.0F }     /*  60 degC */
+};
+
+/* 표 격자의 네 모서리를 SOC 먼저, 그다음 온도 순으로 보간 */
+float32 PackLimitLookupF(const float32 *Table, Uint16 TempIdx, float32 TempRate, Uint16 SocIdx, float32 SocRate)
+{
+    float32 V00, V01, V10, V11;
+    float32 LowRowF, HighRowF;
+
+    V00 = Table[( TempIdx        * C_PackLimitSocPoint) + SocIdx      ];
+    V01 = Table[( TempIdx        * C_PackLimitSocPoint) + SocIdx + 1u ];
+    V10 = Table[((TempIdx + 1u)  * C_PackLimitSocPoint) + SocIdx      ];
+    V11 = Table[((TempIdx + 1u)  * C_PackLimitSocPoint) + SocIdx + 1u ];
+
+    /*--------------------------------------------------------------
+     * 260902 : a+(b-a)*t 형태는 t=1 에서 b 를 정확히 돌려주지 못해
+     *          격자점에서 1e-7 잔차가 남았고, CAN 정수변환(버림)과 겹쳐
+     *          연속충전 -10도/SOC70%(1.1A->1.0A), -30도/SOC90%(0.1A->0.0A)
+     *          두 지점에서 0.1A 오차로 드러났다.
+     *          (1-t)*a + t*b 형태는 t=0/1 에서 a/b 를 정확히 반환한다.
+     *--------------------------------------------------------------*/
+    //LowRowF  = V00 + ((V01 - V00) * SocRate);        /* 낮은 온도 행에서 SOC 방향 보간 */
+    //HighRowF = V10 + ((V11 - V10) * SocRate);        /* 높은 온도 행에서 SOC 방향 보간 */
+    //return LowRowF + ((HighRowF - LowRowF) * TempRate);
+    LowRowF  = (V00 * (1.0F - SocRate)) + (V01 * SocRate);          // TODO : [검증] 260902_Note1, 0.19 낮은 온도 행에서 SOC 방향 보간(격자점 정확)
+    HighRowF = (V10 * (1.0F - SocRate)) + (V11 * SocRate);          // TODO : [검증] 260902_Note1, 0.19 높은 온도 행에서 SOC 방향 보간(격자점 정확)
+
+    return (LowRowF * (1.0F - TempRate)) + (HighRowF * TempRate);   // TODO : [검증] 260902_Note1, 0.19 온도 방향 보간(격자점 정확)
+}
+
+/*--------------------------------------------------------------
+ * 260901 : SystemReg *s -> SocReg *p, 함수명 P56PackCurrentLimit -> CalP56CurrentLimit.
+ *          P56 전류제한 입출력을 SocReg(Farasis56AhSocRegs)로 이관.
+ *          호출부(main.c)에서 SysRegs 와 SocRegs 사이 입출력 복사.
+ *          본체 s-> 를 p-> 로 일괄 변경(로직 동일).
+ *--------------------------------------------------------------*/
+//void P56PackCurrentLimit(SystemReg *s)
+void CalP56CurrentLimit(SocReg *p)
+{
+    Uint16  i;
+    Uint16  TempIdx;
+    Uint16  SocIdx;
+    float32 TempRate;
+    float32 SocRate;
+    float32 CellTempF;
+    float32 CellSocF;
+
+    CellTempF = p->Bat80VCellAgvTemperatureF;                       // TODO : [검증] 260827_Note1, 0.16 표 온도축 입력 = 팩 평균 셀온도
+    /*--------------------------------------------------------------
+     * 260827 : Bat80VSOCF 에 DOD 80% 가 이미 반영되어 있어 셀SOC 환산을 폐지.
+     *          SysSOC 를 표의 SOC 축으로 그대로 사용한다.
+     *--------------------------------------------------------------*/
+    //CellSocF  = 10.0F + (p->Bat80VSOCF * 0.8F);
+    CellSocF  = p->Bat80VSOCF;                                      // TODO : [검증] 260827_Note1, 0.16 SysSOC 직접 사용(DOD80% 기반영)
+
+    /* 표 범위로 제한, 양끝은 가장자리 행 값을 유지 */
+    if(CellTempF < PackLimitTempAxisF[0])                         { CellTempF = PackLimitTempAxisF[0]; }
+    if(CellTempF > PackLimitTempAxisF[C_PackLimitTempPoint - 1u]) { CellTempF = PackLimitTempAxisF[C_PackLimitTempPoint - 1u]; }
+    if(CellSocF  < PackLimitSocAxisF[0])                          { CellSocF  = PackLimitSocAxisF[0]; }
+    if(CellSocF  > PackLimitSocAxisF[C_PackLimitSocPoint - 1u])   { CellSocF  = PackLimitSocAxisF[C_PackLimitSocPoint - 1u]; }
+
+    /* 온도 구간과 그 구간 안에서의 위치 비율을 구함 */
+    TempIdx  = C_PackLimitTempPoint - 2u;
+    TempRate = 1.0F;
+    for(i = 1u; i < C_PackLimitTempPoint; i++)
+    {
+        if(CellTempF <= PackLimitTempAxisF[i])
+        {
+            TempIdx  = i - 1u;
+            TempRate = (CellTempF - PackLimitTempAxisF[i - 1u]) / (PackLimitTempAxisF[i] - PackLimitTempAxisF[i - 1u]);
+            break;
+        }
+    }
+    /* SOC 구간도 같은 방식으로 구함 */
+    SocIdx  = C_PackLimitSocPoint - 2u;
+    SocRate = 1.0F;
+    for(i = 1u; i < C_PackLimitSocPoint; i++)
+    {
+        if(CellSocF <= PackLimitSocAxisF[i])
+        {
+            SocIdx  = i - 1u;
+            SocRate = (CellSocF - PackLimitSocAxisF[i - 1u]) / (PackLimitSocAxisF[i] - PackLimitSocAxisF[i - 1u]);
+            break;
+        }
+    }
+
+    p->Bat80VDisCHAPeakFCurrF     = PackLimitLookupF(&PackDisChaPeakLimitF[0][0], TempIdx, TempRate, SocIdx, SocRate);   // TODO : [검증] 260827_Note1, 0.16 5sec 방전 한계[A](양수 크기)
+    p->Bat80VCHAPeakFCurrF        = PackLimitLookupF(&PackChaPeakLimitF[0][0],    TempIdx, TempRate, SocIdx, SocRate);   // TODO : [검증] 260827_Note1, 0.16 5sec 충전 한계[A]
+    p->Bat80VDisCHAContintyCurrF = PackLimitLookupF(&PackDisChaContLimitF[0][0], TempIdx, TempRate, SocIdx, SocRate);   // TODO : [검증] 260827_Note1, 0.16 연속 방전 한계[A](양수 크기)
+    p->Bat80VCHAContintyCurrF    = PackLimitLookupF(&PackChaContLimitF[0][0],    TempIdx, TempRate, SocIdx, SocRate);   // TODO : [검증] 260827_Note1, 0.16 연속 충전 한계[A]
+
+    /*--------------------------------------------------------------
+     * 260827 : 연속 전류 한계 대비 초과분[A] 산출 — 한계값을 갱신한 자리에서
+     *          함께 구해 Bat80VUnbalCurrentF 에 담는다. 값이 0 보다 크면 초과.
+     *          충전(전류 +)은 연속 충전 한계, 방전(전류 -)은 전류 크기와
+     *          연속 방전 한계를 비교한다(표·측정 모두 양수 크기 기준).
+     *          경고(No.8)·보호(No.23) 판정이 이 값을 사용한다.
+     *--------------------------------------------------------------*/
+    if(p->Bat80VCurrentF >= 0)
+    {
+        p->Bat80VUnbalCurrentF = p->Bat80VCurrentF    - p->Bat80VCHAContintyCurrF;      // TODO : [검증] 260827_Note1, 0.16 연속 충전 한계 대비 초과분[A](+ = 초과)
+    }
+    else
+    {
+        p->Bat80VUnbalCurrentF = p->Bat80VCurrentAsbF - p->Bat80VDisCHAContintyCurrF;   // TODO : [검증] 260827_Note1, 0.16 연속 방전 한계 대비 초과분[A](+ = 초과)
+    }
+
+    /*--------------------------------------------------------------
+     * 260902 : (사용자 결정) R3 서문 "이용온도 밖 0A(사용 금지)" 정책 미적용.
+     *          → 전류한계 표대로만 동작. 취소선 -30/-20/60℃ 행도 참고값으로
+     *            보간에 그대로 사용(추가 0A 강제 없음).
+     *          아래 0A 강제 가드는 보류 — 되살릴 때 주석 해제 + 상단 매크로 복구.
+     *--------------------------------------------------------------*/
+    //if((p->Bat80VCellAgvTemperatureF < C_PackLimitUsableTempMinF) ||
+    //   (p->Bat80VCellAgvTemperatureF > C_PackLimitUsableTempMaxF))
+    //{
+    //    p->Bat80VDisCHAPeakFCurrF    = 0.0F;   // 이용온도 밖 방전피크 0A(사용 금지)
+    //    p->Bat80VCHAPeakFCurrF       = 0.0F;   // 이용온도 밖 충전피크 0A(사용 금지)
+    //    p->Bat80VDisCHAContintyCurrF = 0.0F;   // 이용온도 밖 방전연속 0A(사용 금지)
+    //    p->Bat80VCHAContintyCurrF    = 0.0F;   // 이용온도 밖 충전연속 0A(사용 금지)
+    //}
+}
+#endif

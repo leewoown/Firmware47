@@ -65,7 +65,8 @@ void CalSocHandle(SocReg *P);
 void Cal80VSysFaultCheck(SystemReg *s);
 void Cal80VSysAlarmtCheck(SystemReg *s);
 void PWRHoldHandle(SystemReg *s);
-void PackCurrentLimit(SystemReg *s);   // TODO : [검증] 260827_Note1, 0.16 Safety Current Limit 산출
+//void P56PackCurrentLimit(SystemReg *s);   // 260901: 시그니처 변경으로 폐지
+void CalP56CurrentLimit(SocReg *p);       // TODO : [검증] 260901_Note1, 0.19 P56 Safety Current Limit 산출(SocReg 입출력)
 float32 PackLimitLookupF(const float32 *Table, Uint16 TempIdx, float32 TempRate, Uint16 SocIdx, float32 SocRate);   // TODO : [검증] 260827_Note1, 0.16 전류한계 표 bilinear 보간 헬퍼
 
 
@@ -1222,28 +1223,53 @@ interrupt void cpu_timer0_isr(void)
                  *--------------------------------------------------------------*/
                 if(SysRegs.BAT80VStateReg.bit.INITOK==1)
                 {
-                    PackCurrentLimit(&SysRegs);   // TODO : [검증] 260827_Note1, 0.16 온도·SOC 기반 충/방전 허용전류[A] 갱신
+#if FarasisP56Ah
+                    /*--------------------------------------------------------------
+                     * 260901 : CalP56CurrentLimit 를 SocReg(Farasis56AhSocRegs) 입출력으로 변경.
+                     *          입력(온도·SOC·전류)을 SysRegs -> SocRegs 로 복사 후 호출,
+                     *          산출된 전류한계를 SocRegs -> SysRegs 로 되복사(하류 송신/판정용).
+                     *--------------------------------------------------------------*/
+                    //P56PackCurrentLimit(&SysRegs);
+                    Farasis56AhSocRegs.Bat80VCellAgvTemperatureF = SysRegs.Bat80VCellAgvTemperatureF;    // TODO : [검증] 260901_Note1, 0.19 P56 입력: 셀 평균 온도
+                    Farasis56AhSocRegs.Bat80VSOCF                = SysRegs.Bat80VSOCF;                   // TODO : [검증] 260901_Note1, 0.19 P56 입력: 팩 SOC
+                    Farasis56AhSocRegs.Bat80VCurrentF            = SysRegs.Bat80VCurrentF;               // TODO : [검증] 260901_Note1, 0.19 P56 입력: 팩 전류
+                    Farasis56AhSocRegs.Bat80VCurrentAsbF         = SysRegs.Bat80VCurrentAsbF;            // TODO : [검증] 260901_Note1, 0.19 P56 입력: 팩 전류 절대값
+                    CalP56CurrentLimit(&Farasis56AhSocRegs);                                             // TODO : [검증] 260901_Note1, 0.19 온도·SOC 기반 충/방전 허용전류[A] 갱신 (P56 전용)
+                    SysRegs.Bat80VDisCHAPeakFCurrF    = Farasis56AhSocRegs.Bat80VDisCHAPeakFCurrF;       // TODO : [검증] 260901_Note1, 0.19 P56 출력: 5s 방전 한계
+                    SysRegs.Bat80VCHAPeakFCurrF       = Farasis56AhSocRegs.Bat80VCHAPeakFCurrF;          // TODO : [검증] 260901_Note1, 0.19 P56 출력: 5s 충전 한계
+                    SysRegs.Bat80VDisCHAContintyCurrF = Farasis56AhSocRegs.Bat80VDisCHAContintyCurrF;    // TODO : [검증] 260901_Note1, 0.19 P56 출력: 연속 방전 한계
+                    SysRegs.Bat80VCHAContintyCurrF    = Farasis56AhSocRegs.Bat80VCHAContintyCurrF;       // TODO : [검증] 260901_Note1, 0.19 P56 출력: 연속 충전 한계
+                    SysRegs.Bat80VUnbalCurrentF       = Farasis56AhSocRegs.Bat80VUnbalCurrentF;          // TODO : [검증] 260901_Note1, 0.19 P56 출력: 연속한계 초과분
+#endif
                 }
        break;
        case 11:
                 //At 80MHZ, operation time is 0.151msec
                if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                {
-                 //SysRegs.Bat80VCHAContintyCurrF    =  12.2;   // TODO : [삭제] 260827_Note1, 0.16 고정값 폐지(PackCurrentLimit 산출로 대체)
+                 //SysRegs.Bat80VCHAContintyCurrF    =  12.2;   // TODO : [삭제] 260827_Note1, 0.16 고정값 폐지(P56PackCurrentLimit 산출로 대체)
                  //SysRegs.Bat80VDisCHAContintyCurrF =  8.6;    // TODO : [삭제] 260827_Note1, 0.16 고정값 폐지
                  //SysRegs.Bat80VCHAPeakFCurrF = 20.2;           // TODO : [삭제] 260827_Note1, 0.16 고정값 폐지
                  //SysRegs.Bat80VDisCHAPeakFCurrF = 12.2;        // TODO : [삭제] 260827_Note1, 0.16 고정값 폐지
                  /*--------------------------------------------------------------
                   * 260827 : 전류 극성 규약 반영 — 충전 = 양(+), 방전 = 음(-).
-                  *          PackCurrentLimit 는 판정 편의상 4종 모두 크기(양수)로
+                  *          P56PackCurrentLimit 는 판정 편의상 4종 모두 크기(양수)로
                   *          보관하므로, 송신 시점에만 방전에 -1 을 곱한다.
                   *--------------------------------------------------------------*/
                  //CANARegs.BAT80VDisCHAContintyCurr = (unsigned int)(SysRegs.Bat80VDisCHAContintyCurrF*10);
                  //CANARegs.BAT80VDisCHAPeakCurr     = (unsigned int)(SysRegs.Bat80VDisCHAPeakFCurrF*10);
-                 CANARegs.BAT80VCHAContintyCurr    = (unsigned int)( SysRegs.Bat80VCHAContintyCurrF*10);      // TODO : [검증] 260827_Note1, 0.16 충전 연속한계[0.1A], 양(+)
-                 CANARegs.BAT80VDisCHAContintyCurr = (int)(-1.0F * SysRegs.Bat80VDisCHAContintyCurrF*10);     // TODO : [검증] 260827_Note1, 0.16 방전 연속한계[0.1A], 음(-)으로 반전
-                 CANARegs.BAT80VCHAPeakCurr        = (unsigned int)( SysRegs.Bat80VCHAPeakFCurrF*10);          // TODO : [검증] 260827_Note1, 0.16 충전 피크한계[0.1A], 양(+)
-                 CANARegs.BAT80VDisCHAPeakCurr     = (int)(-1.0F * SysRegs.Bat80VDisCHAPeakFCurrF*10);         // TODO : [검증] 260827_Note1, 0.16 방전 피크한계[0.1A], 음(-)으로 반전
+                 /*--------------------------------------------------------------
+                  * 260902 : (형)캐스팅은 소수점 버림이라 보간 잔차가 1LSB(0.1A)
+                  *          오차로 드러남 → 충전 +0.5, 방전 -0.5 를 더해 반올림.
+                  *--------------------------------------------------------------*/
+                 //CANARegs.BAT80VCHAContintyCurr    = (unsigned int)( SysRegs.Bat80VCHAContintyCurrF*10);      // TODO : [검증] 260827_Note1, 0.16 충전 연속한계[0.1A], 양(+)
+                 //CANARegs.BAT80VDisCHAContintyCurr = (int)(-1.0F * SysRegs.Bat80VDisCHAContintyCurrF*10);     // TODO : [검증] 260827_Note1, 0.16 방전 연속한계[0.1A], 음(-)으로 반전
+                 //CANARegs.BAT80VCHAPeakCurr        = (unsigned int)( SysRegs.Bat80VCHAPeakFCurrF*10);          // TODO : [검증] 260827_Note1, 0.16 충전 피크한계[0.1A], 양(+)
+                 //CANARegs.BAT80VDisCHAPeakCurr     = (int)(-1.0F * SysRegs.Bat80VDisCHAPeakFCurrF*10);         // TODO : [검증] 260827_Note1, 0.16 방전 피크한계[0.1A], 음(-)으로 반전
+                 CANARegs.BAT80VCHAContintyCurr    = (unsigned int)(( SysRegs.Bat80VCHAContintyCurrF    * 10.0F) + 0.5F);   // TODO : [검증] 260902_Note1, 0.19 충전 연속한계[0.1A] 반올림, 양(+)
+                 CANARegs.BAT80VDisCHAContintyCurr = (int)((-1.0F * SysRegs.Bat80VDisCHAContintyCurrF * 10.0F) - 0.5F);     // TODO : [검증] 260902_Note1, 0.19 방전 연속한계[0.1A] 반올림, 음(-)으로 반전
+                 CANARegs.BAT80VCHAPeakCurr        = (unsigned int)(( SysRegs.Bat80VCHAPeakFCurrF       * 10.0F) + 0.5F);   // TODO : [검증] 260902_Note1, 0.19 충전 피크한계[0.1A] 반올림, 양(+)
+                 CANARegs.BAT80VDisCHAPeakCurr     = (int)((-1.0F * SysRegs.Bat80VDisCHAPeakFCurrF    * 10.0F) - 0.5F);     // TODO : [검증] 260902_Note1, 0.19 방전 피크한계[0.1A] 반올림, 음(-)으로 반전
                  CANATX(0x604,8,CANARegs.BAT80VCHAContintyCurr,CANARegs.BAT80VDisCHAContintyCurr,CANARegs.BAT80VCHAPeakCurr,CANARegs.BAT80VDisCHAPeakCurr);
                }
        break;

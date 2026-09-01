@@ -292,6 +292,20 @@ typedef struct
 
 
 
+  /*--------------------------------------------------------------
+   * 260901 : P56 안전 전류제한 I/O 를 SocReg 로 이관 (CalP56CurrentLimit).
+   *          호출부(main.c)에서 SysRegs 와 이 멤버들 사이 입출력 복사.
+   *--------------------------------------------------------------*/
+  float32  Bat80VCellAgvTemperatureF;   // TODO : [검증] 260901_Note1, 0.19 P56 입력: 셀 평균 온도[C]
+  float32  Bat80VSOCF;                  // TODO : [검증] 260901_Note1, 0.19 P56 입력: 팩 SOC[%]
+  float32  Bat80VCurrentF;              // TODO : [검증] 260901_Note1, 0.19 P56 입력: 팩 전류[A]
+  float32  Bat80VCurrentAsbF;           // TODO : [검증] 260901_Note1, 0.19 P56 입력: 팩 전류 절대값[A]
+  float32  Bat80VDisCHAPeakFCurrF;      // TODO : [검증] 260901_Note1, 0.19 P56 출력: 5s 방전 한계[A]
+  float32  Bat80VCHAPeakFCurrF;         // TODO : [검증] 260901_Note1, 0.19 P56 출력: 5s 충전 한계[A]
+  float32  Bat80VDisCHAContintyCurrF;   // TODO : [검증] 260901_Note1, 0.19 P56 출력: 연속 방전 한계[A]
+  float32  Bat80VCHAContintyCurrF;      // TODO : [검증] 260901_Note1, 0.19 P56 출력: 연속 충전 한계[A]
+  float32  Bat80VUnbalCurrentF;         // TODO : [검증] 260901_Note1, 0.19 P56 출력: 연속한계 초과분[A]
+
   union SoCState_REG SoCStateRegs;
 } SocReg;
 

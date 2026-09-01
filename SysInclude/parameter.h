@@ -298,7 +298,9 @@ Parameter
 //#define     Product_Version                    18   // 이전값(원복 전)
 //#define     Product_Version                    16   // TODO : [변경] 260901_Note1, 0.16 Product_Version 18->16 (VER 0.16)
 //#define     Product_Version                    17   // TODO : [변경] 260901_Note1, 0.17 Product_Version 16->17 (VER 0.17, R12 반영)
-#define     Product_Version                      18   // TODO : [변경] 260901_Note1, 0.18 Product_Version 17->18 (BATIC SPI 설정 기입 추가)
+//#define     Product_Version                    18   // TODO : [변경] 260901_Note1, 0.18 Product_Version 17->18 (BATIC SPI 설정 기입 추가)
+//#define     Product_Version                    19   // TODO : [변경] 260901_Note1, 0.19 Product_Version 18->19 (보호설정표 R9 반영)
+#define     Product_Version                      20   // TODO : [변경] 260902_Note1, 0.20 Product_Version 19->20 (P56 전류제한 BATAlgorithm 이관·SocReg 입출력화)
 /*--------------------------------------------------------------
  * 260831 : 디버깅보드 시험모드 해제 — 모사장치 CAN 대신 실기 isoSPI 사용.
  *          셀 전압/온도를 LTC6804 에서 직접 취득하며,
@@ -347,206 +349,73 @@ Parameter
 
 
 
-// Alarm Set Vaule  //
-/*
-// ※ 아래 Alarm #define은 현재 비활성(주석). 실제 Warning 임계값은 Cal80VSysAlarmtCheck()의 하드코딩값.
-//    엑셀 설정값(WrnXX)과 일치하도록 갱신해 둠(향후 재사용 대비).
-#define     C_Bat80VOVPackCurrentAlarm                     450.0  //26.05.30기준 WrnOC 450A (이전504)
-#define     C_Bat80VOVPkACKSOCAlarm                        100.0  //26.05.30기준 WrnSocH 100%
-#define     C_Bat80VUDPkACKSOCAlarm                        5.0    //26.05.30기준 WrnSocL 5%
-#define     C_Bat80VOVPackVoltageAlarm                     90.2   //26.05.30기준 WrnOv 90.2V (이전108.8)
-#define     C_Bat80VUDPackVoltageAlarm                     66.0   //26.05.30기준 WrnUv 66V (이전72.0)
-#define     C_Bat80VOVPackTemperatureAlarm                 47.0   //26.05.30기준 WrnOt 47도 (이전55.0)
-#define     C_Bat80VUNPackTemperatureAlarm                -25.0   //26.05.30기준 WrnUt -25도 (이전-15.0)
-#define     C_Bat80VOVCellVoltageAlarm                     4.10   //26.05.30기준 WrnCellOv 4.1V (이전4.20)
-#define     C_Bat80VUDCellVoltageAlarm                     3.00   //26.05.30기준 WrnCellUv 3.0V
-#define     C_Bat80VDIVCellVoltageAlarm                    0.2    //26.05.30기준 WrnCellUnbalV 200mV
-#define     C_Bat80VOVCellTemperatureAlarm                 55.0   //26.05.30기준 WrnCellOt 55도
-#define     C_Bat80VUDCellTemperatureAlarm                -20.0   //26.05.30기준 WrnCellUt -20도 (이전-15.0)
-#define     C_Bat80VDIVCellTemperatureAlarm                10.0   //26.05.30기준 WrnCellUnbalTmp 10도
-*/
-
 //Fault Set Vaule
 #define     C_Bat80VFaultDelayCount                        8000
-/*--------------------------------------------------------------
- * 260827 : 보호설정표 260827 R4 — ISOSPI 통신이상 카운트 50 → 210.
- *          설정표 기준(210 CONT)으로 정렬. 판정 로직은 아직 없음.
- *--------------------------------------------------------------*/
-//#define     C_ISOSPICount                                  50
-#define     C_ISOSPICount                                  210    // TODO : [튜닝] 260827_Note1, 0.16 BPA_FltISOSPI_Err 210 CONT (R4 반영, 판정 로직 미구현)
+#define     C_ISOSPICount                                  210    // ISOSPI 통신오류 : 50(초기)->210(V0.16), 판정 로직 미구현
 #define     C_CANCount                                     50
-#define     C_RleyCount                                    1
-// TODO(PrtotectSet2605030 반영, 검증 후 정리): Protect 임계값을 엑셀 설정값과 일치. 주석=이전값.
-//#define     C_PackCTOV_Fault        500.0   //26.05.30기준 500A (이전506.0)
-#define     C_PackCTOV_Fault        505.0   // TODO : [튜닝] 260809_Note1, 0.15 FltOc 505A(표반영)
-#define     C_PackOCTimer_Fault     480.0   //26.05.30기준 480A (이전500.0) OC타이머 전류임계
-/*--------------------------------------------------------------
- * 260827 : 보호설정표 R6 — 최대 전류 시간(Bsa_FltOcTimer) 1 → 10 Sec.
- *          480A 이상이 10초 이상 지속될 때 FAULT. 루프 1ms 기준 카운트.
- *--------------------------------------------------------------*/
-//#define     C_PackOCTimerCount      1000    //26.05.30湲곗� 1sec (480A 1sec �쑀吏�) �삳（�봽1ms 湲곗�
-#define     C_PackOCTimerCount      10000   // TODO : [튜닝] 260827_Note1, 0.16 최대 전류 시간 10sec 유지 (480A x 10sec, R6 반영)
-/*--------------------------------------------------------------
- * 260827 : 최대 전류 반복(Bsa_FltOcTime_min) 신규 — 480A 진입 순간이
- *          1분 창 안에서 4회 발생하면 FAULT. 루프 1ms 기준.
- *--------------------------------------------------------------*/
-/*--------------------------------------------------------------
- * 260827 : 보호설정표 R6 — 최대 전류 반복 4 → 5 Count/min.
- *--------------------------------------------------------------*/
-//#define     C_PackOCEventCount      4       // TODO : [튜닝] 260827_Note1, 0.16 FltOcTime_min 1분당 허용 4회 (R5 반영)
-#define     C_PackOCEventCount      5       // TODO : [튜닝] 260827_Note1, 0.16 최대 전류 반복 1분당 허용 5회 (R6 반영)
-#define     C_PackOCEventWindow     60000   // TODO : [튜닝] 260827_Note1, 0.16 최대 전류 반복 집계 창 1분(60000ms)
-//#define     C_PackSOCOV_Fault       101.0   //26.05.30기준 101%
-//#define     C_PackSOCUN_Fault       -0.1    //26.05.30기준 -0.1%
-#define     C_PackSOCOV_Fault       100.0   // TODO : [튜닝] 260809_Note1, 0.15 FltctSocH 100%(표반영)
-#define     C_PackSOCUN_Fault       0.0     // TODO : [튜닝] 260809_Note1, 0.15 FltctSocL 0%(표반영)
-#define     C_PackVoltOV_Fault      91.3    //26.05.30기준 91.3V (이전102.4)
-//#define     C_PackVoltUN_Fault      61.6    //26.05.30기준 61.6V (이전67.2)
-/*--------------------------------------------------------------
- * 260827 : 보호설정표 260827 R4 — 팩 저전압 FAULT 62.7 → 58.3 V.
- *          셀 저전압 폴트 2.65 V x 22S 연동값.
- *--------------------------------------------------------------*/
-//#define     C_PackVoltUN_Fault      62.7    // TODO : [�뒠�떇] 260809_Note1, 0.15 FltUv 62.7V(�몴諛섏쁺)
-#define     C_PackVoltUN_Fault      58.3    // TODO : [튜닝] 260827_Note1, 0.16 FltUv 58.3V (2.65V x 22S, R4 반영)
-#define     C_PackTempOV_Fault      52.0    //26.05.30기준 52도 (이전60.0)
-/*--------------------------------------------------------------
- * 260830 : 팩 저온 FAULT -35.0 → -25.0 도.
- *          셀 저온 폴트 -30.0 보다 높게 두어 팩이 먼저 검출되도록 함
- *          (경고 팩-20/셀-25 · 과온 팩52/셀60 과 방향 일치).
- *--------------------------------------------------------------*/
-//#define     C_PackTempUN_Fault      -35.0   //26.05.30기준 -35도 (이전-30.0)
-#define     C_PackTempUN_Fault      -25.0   // TODO : [튜닝] 260830_Note1, 0.16 FltUt -25.0 (셀 저온 폴트 -30.0 보다 먼저 검출)
-//#define     C_CellVoltOV_Fault      4.15    //26.05.30기준 4.15V (이전4.27)
-//#define     C_CellVoltUN_Fault      2.8     //26.05.30기준 2.8V (이전2.75)
-//#define     C_CellVoltDIV_Fault     0.5     //26.05.30기준 500mV
-#define     C_CellVoltOV_Fault      4.20    // TODO : [튜닝] 260809_Note1, 0.15 FltCellOv 4.20V(표반영)
-/*--------------------------------------------------------------
- * 260827 : 보호설정표 260827 R4 — 셀 저전압 FAULT 2.85 → 2.65 V.
- *          셀 기준 보호 최대치 변경. 팩 FltUv 58.3 V 와 연동.
- *--------------------------------------------------------------*/
-//#define     C_CellVoltUN_Fault      2.85    // TODO : [�뒠�떇] 260809_Note1, 0.15 FltCellUv 2.85V(�몴諛섏쁺)
-#define     C_CellVoltUN_Fault      2.65    // TODO : [튜닝] 260827_Note1, 0.16 FltCellUv 2.65V (R4 반영)
-#define     C_CellVoltDIV_Fault     0.35    // TODO : [튜닝] 260809_Note1, 0.15 FltCellUnbalVlt 350mV(표반영)
-#define     C_CellTempOV_Fault      60.0    //26.05.30기준 60도
-#define     C_CellTempUN_Fault      -30.0   //26.05.30기준 -30도 (이전-25.0)
-/*--------------------------------------------------------------
- * 260810 : �� �삩�룄�렪李� �뤃�듃 �엫怨� �긽�뼢 �� 寃쎄퀬(10�룄)�� �뤃�듃(10�룄)媛�
- *          �룞�씪�빐 �렪李� 10.1�룄�뿉�꽌 寃쎄퀬 利됱떆 + 5珥� �썑 李⑤떒 諛쒖깮.
- *          �젅���삩�룄 蹂댄샇(��60�룄/�뙥52�룄)�뒗 �쑀吏��릺誘�濡� 留덉쭊 �솗蹂�.
- *--------------------------------------------------------------*/
-//#define     C_CellTempDIV_Fault     10.0    //26.05.30湲곗� 10�룄 (�씠�쟾15.0)
-/*--------------------------------------------------------------
- * 260827 : 보호설정표 260827 R4 는 10도 이나 펌웨어 20도 유지 확정.
- *          표대로 10도면 경고(10도)와 임계가 같아지고 폴트 지연이 0 이라
- *          경고 set(100ms) 전에 즉시 차단됨 → 단계 분리 위해 20도 존치.
- *          ※ 설정표를 20도로 갱신 요청할 것.
- *--------------------------------------------------------------*/
-//#define     C_CellTempDIV_Fault     20.0    // TODO : [�뒠�떇] 260810_Note1, 0.15 ���삩�룄�렪李� �뤃�듃 20�룄 (寃쎄퀬 10�룄�� 遺꾨━)
-#define     C_CellTempDIV_Fault     20.0    // TODO : [튜닝] 260827_Note1, 0.16 FltCellUnbalTmp 20도 유지 확정 (R4 표 10도 미반영, 경고 10도와 분리)
-#define     C_IOSresistanceFault    45000
-//Fault Delay Time
+#define     C_RleyCount                                    1      // 릴레이 이상 : 임시값, 설정 미확정
+#define     C_PackCTOV_Fault        505.0   // 과전류 차단 : 506.0->500.0(초기)->505.0(V0.15)
+#define     C_PackOCTimer_Fault     480.0   // 최대전류 시간 전류임계 : 500.0->480.0(초기)
+#define     C_PackOCTimerCount      10000   // 최대전류 시간 유지 : 1000(1s,초기)->10000(10s,V0.16)
+#define     C_PackOCEventCount      5       // 최대전류 반복 횟수/분 : 4->5(V0.16 신규)
+#define     C_PackOCEventWindow     60000   // 최대전류 반복 집계창 1분 : 신규(V0.16)
+#define     C_PackSOCOV_Fault       100.0   // 과충전 차단 : 101.0(초기)->100.0(V0.15)
+#define     C_PackSOCUN_Fault       0.0     // 저충전 차단 : -0.1(초기)->0.0(V0.15)
+#define     C_PackVoltOV_Fault      91.3    // 팩 과전압 차단 : 102.4->91.3(초기), R9 92.4 미반영하고 91.3 유지(V0.19)
+#define     C_PackVoltUN_Fault      58.3    // 팩 저전압 차단 : 67.2->61.6(초기)->62.7(V0.15)->58.3(V0.16, 셀2.65x22S)
+#define     C_PackTempOV_Fault      52.0    // 팩 고온 차단 : 60.0->52.0(초기)
+#define     C_PackTempUN_Fault      -27.0   // 팩 저온 차단 : -30.0->-35.0(초기)->-25.0(V0.16)->-27.0(V0.19)
+#define     C_CellVoltOV_Fault      4.20    // 셀 과전압 차단 : 4.27->4.15(초기)->4.20(V0.15)
+#define     C_CellVoltUN_Fault      2.65    // 셀 저전압 차단 : 2.75->2.8(초기)->2.85(V0.15)->2.65(V0.16)
+#define     C_CellVoltDIV_Fault     0.40    // 셀 전압편차 차단 : 0.5(초기)->0.35(V0.15)->0.40(V0.19)
+#define     C_CellTempOV_Fault      60.0    // 셀 고온 차단 : 초기값
+#define     C_CellTempUN_Fault      -30.0   // 셀 저온 차단 : -25.0->-30.0(초기)
+#define     C_CellTempDIV_Fault     20.0    // 셀 온도편차 차단 : 15.0->10.0(초기)->20.0(V0.15, 경고10도와 분리)
+#define     C_IOSresistanceFault    45000   // 절연저항 이상 : 임시값, 설정 미확정
 
-/*--------------------------------------------------------------
- * 260827 : 보호설정표 260830 R3 — Fault 유지시간 전 항목 「즉시 = 0」 통일.
- *          설정표는 Fault 23항목 모두 지연 0 이나 펌웨어에 1~5000ms 잔존.
- *          향후 재조정 대비로 기존 지연값은 주석 보존.
- *          ※ 값·미구현 로직·0x603 상위비트 보고는 본 변경 범위 아님(별도 반영).
- *--------------------------------------------------------------*/
-//#define     C_PackCTOV_FaultDelay       1
-#define     C_PackCTOV_FaultDelay       0      // TODO : [튜닝] 260827_Note1, 0.16 FltOc 유지시간 1→0ms (즉시)
-#define     C_PackSOCOV_FaultDelay      0
-#define     C_PackSOCUN_FaultDelay      0
-//#define     C_PackVoltOV_FaultDelay     2000
-//#define     C_PackVoltUN_FaultDelay     2000
-#define     C_PackVoltOV_FaultDelay     0      // TODO : [튜닝] 260827_Note1, 0.16 FltOv 유지시간 2000→0ms (즉시)
-#define     C_PackVoltUN_FaultDelay     0      // TODO : [튜닝] 260827_Note1, 0.16 FltUv 유지시간 2000→0ms (즉시)
-#define     C_PackTempOV_FaultDelay     0
-#define     C_PackTempUN_FaultDelay     0
-//#define     C_CellVoltOV_FaultDelay     2000
-//#define     C_CellVoltUN_FaultDelay     2000
-//#define     C_CellVoltDIV_FaultDelay    5000
-#define     C_CellVoltOV_FaultDelay     0      // TODO : [튜닝] 260827_Note1, 0.16 FltCellOv 유지시간 2000→0ms (즉시)
-#define     C_CellVoltUN_FaultDelay     0      // TODO : [튜닝] 260827_Note1, 0.16 FltCellUv 유지시간 2000→0ms (즉시)
-#define     C_CellVoltDIV_FaultDelay    0      // TODO : [튜닝] 260827_Note1, 0.16 FltCellUnbalVlt 유지시간 5000→0ms (즉시)
-#define     C_CellTempOV_FaultDelay     0
-#define     C_CellTempUN_FaultDelay     0
-//#define     C_CellTempDIV_FaultDelay    5000
-#define     C_CellTempDIV_FaultDelay    0      // TODO : [튜닝] 260827_Note1, 0.16 FltCellUnbalTmp 유지시간 5000→0ms (즉시, 임계 20도 유지)
-/*--------------------------------------------------------------
- * 260827 : Bsa_FltUnbalPwr 신규 — 연속 전류 한계 초과 15초 이상 지속 시 FAULT.
- *          경고는 10초(C_PackUnbalPwr_WarnDelay). 루프 1ms 기준.
- *--------------------------------------------------------------*/
-/*--------------------------------------------------------------
- * 260827 : 보호설정표 R6 — Bsa_FltUnbalPwr 유지시간 15 Sec 확정.
- *--------------------------------------------------------------*/
-//#define     C_PackUnbalPwr_FaultDelay   10000  // TODO : [튜닝] 260827_Note1, 0.16 FltUnbalPwr 10sec 유지 (연속 전류 한계 초과, 단위 A)
-#define     C_PackUnbalPwr_FaultDelay   15000  // TODO : [튜닝] 260827_Note1, 0.16 FltUnbalPwr 15sec 유지 (전류제한 초과, 단위 A, R6 반영)
+//Fault Delay Time (유지시간 카운트, 루프1ms 기준). 설정표는 전 항목 즉시(0)
+#define     C_PackCTOV_FaultDelay       0      // 과전류 : 1(초기)->0(V0.16)
+#define     C_PackSOCOV_FaultDelay      0      // 과충전
+#define     C_PackSOCUN_FaultDelay      0      // 저충전
+#define     C_PackVoltOV_FaultDelay     0      // 팩 과전압 : 2000(초기)->0(V0.16)
+#define     C_PackVoltUN_FaultDelay     0      // 팩 저전압 : 2000(초기)->0(V0.16)
+#define     C_PackTempOV_FaultDelay     0      // 팩 고온
+#define     C_PackTempUN_FaultDelay     0      // 팩 저온
+#define     C_CellVoltOV_FaultDelay     0      // 셀 과전압 : 2000(초기)->0(V0.16)
+#define     C_CellVoltUN_FaultDelay     0      // 셀 저전압 : 2000(초기)->0(V0.16)
+#define     C_CellVoltDIV_FaultDelay    0      // 셀 전압편차 : 5000(초기)->0(V0.16)
+#define     C_CellTempOV_FaultDelay     0      // 셀 고온
+#define     C_CellTempUN_FaultDelay     0      // 셀 저온
+#define     C_CellTempDIV_FaultDelay    0      // 셀 온도편차 : 5000(초기)->0(V0.16)
+#define     C_PackUnbalPwr_FaultDelay   15000  // 전류한계 초과 차단 : 10000->15000(V0.16 신규, 15초)
 
-//Warning(Alarm) Set Vaule
-/*--------------------------------------------------------------
- * 260827 : 보호설정표 R6 정합 — 경고 해제값 8건을 설정표 정확값으로 복원.
- *          260809 에 소수 1~3자리로 반올림해 넣었던 값들이며,
- *          R6 5-3 절「반올림 차이」로 남아 있던 항목이다.
- *          float32 유효자리 안이라 표기 그대로 반영 가능.
- *--------------------------------------------------------------*/
-// 26.05.30기준 PrtotectSet2605030 의 Wrn 항목. _Warn=Trigger, _WarnRst=Release(히스테리시스)
-#define     C_PackCTOV_Warn                                450.0  //26.05.30기준 WrnOC 450A
-#define     C_PackCTOV_WarnRst                             405.0  //26.05.30기준 release 405A
-/*--------------------------------------------------------------
- * 260809 : WrnSocH 경고 임계 조정 — 100→95%, 해제 97→92.15%(3% 히스)
- *--------------------------------------------------------------*/
-//#define     C_PackSOCOV_Warn                               100.0  //26.05.30기준 WrnSocH 100%
-//#define     C_PackSOCOV_WarnRst                            97.0   //26.05.30기준 release 97%
-#define     C_PackSOCOV_Warn                               95.0   // TODO : [튜닝] 260809_Note1, 0.15 WrnSocH 95% 이상
-//#define     C_PackSOCOV_WarnRst                            92.2   // TODO : [�뒠�떇] 260809_Note1, 0.15 �빐�젣 92.2%(�냼�닔1, �몴諛섏쁺)
-#define     C_PackSOCOV_WarnRst                            92.15  // TODO : [튜닝] 260827_Note1, 0.16 WrnSocH 해제 92.15% (R6 정확값)
-#define     C_PackSOCUN_Warn                               5.0    //26.05.30기준 WrnSocL 5%
-#define     C_PackSOCUN_WarnRst                            5.25   //26.05.30기준 release 5.25%
-//#define     C_PackVoltOV_Warn                              90.2   //26.05.30기준 WrnOv 90.2V
-//#define     C_PackVoltOV_WarnRst                           87.494 //26.05.30기준 release 87.494V
-//#define     C_PackVoltOV_Warn                              90.9   // TODO : [�뒠�떇] 260809_Note1, 0.15 WrnOv 90.9V(�냼�닔1, �몴諛섏쁺)
-#define     C_PackVoltOV_Warn                              90.86  // TODO : [튜닝] 260827_Note1, 0.16 WrnOv 발생 90.86V (R6 정확값)
-//#define     C_PackVoltOV_WarnRst                           88.1   // TODO : [�뒠�떇] 260809_Note1, 0.15 �빐�젣 88.1V(�냼�닔1)
-#define     C_PackVoltOV_WarnRst                           88.1342 // TODO : [튜닝] 260827_Note1, 0.16 WrnOv 해제 88.1342V (R6 정확값)
-#define     C_PackVoltUN_Warn                              66.0   //26.05.30기준 WrnUv 66V
-#define     C_PackVoltUN_WarnRst                           69.3   //26.05.30기준 release 69.3V
-#define     C_PackTempOV_Warn                              47.0   //26.05.30기준 WrnOt 47도
-//#define     C_PackTempOV_WarnRst                           44.65  //26.05.30기준 release 44.65도
-//#define     C_PackTempOV_WarnRst                           44.7   // TODO : [�뒠�떇] 260809_Note1, 0.15 �빐�젣 44.7�룄(�냼�닔1)
-#define     C_PackTempOV_WarnRst                           44.65  // TODO : [튜닝] 260827_Note1, 0.16 WrnOt 해제 44.65도 (R6 정확값)
-//#define     C_PackTempUN_Warn                             -25.0   //26.05.30湲곗� WrnUt -25�룄
-#define     C_PackTempUN_Warn                        -25.0  // TODO : [원복] 260901_Note1, 0.18 저온경고 WrnUt -25도 (스왑 되돌림)
-//#define     C_PackTempUN_WarnRst                           0.0    //26.05.30기준 release 0도
-//#define     C_PackTempUN_WarnRst                          -23.8   //260809 WrnUt �빐�젣(�뒪�솑 �쟾)
-#define     C_PackTempUN_WarnRst                     -23.8  // TODO : [원복] 260901_Note1, 0.18 저온경고 WrnUt 해제 -23.8도 (스왑 되돌림)
-//#define     C_CellVoltOV_Warn                              4.10   //26.05.30기준 WrnCellOv 4.1V
-//#define     C_CellVoltOV_WarnRst                           4.0795 //26.05.30기준 release 4.0795V
-#define     C_CellVoltOV_Warn                              4.15   // TODO : [튜닝] 260809_Note1, 0.15 WrnCellOv 4.15V(표반영)
-//#define     C_CellVoltOV_WarnRst                           4.129  // TODO : [�뒠�떇] 260809_Note1, 0.15 �빐�젣 4.129V(�냼�닔3)
-#define     C_CellVoltOV_WarnRst                           4.12925 // TODO : [튜닝] 260827_Note1, 0.16 WrnCellOv 해제 4.12925V (R6 정확값)
-#define     C_CellVoltUN_Warn                              3.00   //26.05.30기준 WrnCellUv 3.0V
-#define     C_CellVoltUN_WarnRst                           3.015  //26.05.30기준 release 3.015V
-#define     C_CellVoltDIV_Warn                             0.2    //26.05.30기준 WrnCellUnbalV 200mV
-/*--------------------------------------------------------------
- * 260716 : 셀 편차 알람 해제 임계값 상향 (20mV로는 정상 편차에서
- *          해제가 안 돼 알람이 latch됨 → 히스테리시스 밴드 축소)
- *--------------------------------------------------------------*/
-//#define     C_CellVoltDIV_WarnRst                          0.02   //26.05.30기준 release 20mV
-//#define     C_CellVoltDIV_WarnRst                          0.1    // TODO : [튜닝] 260716_Note1, 0.12 셀전압편차 알람 해제 100mV (기존 20mV→100mV)
-//#define     C_CellVoltDIV_WarnRst                          0.067  // TODO : [�뒠�떇] 260809_Note1, 0.15 �빐�젣 67mV(�몴諛섏쁺)
-#define     C_CellVoltDIV_WarnRst                          0.0666667 // TODO : [튜닝] 260827_Note1, 0.16 WrnCellUnbalV 해제 66.6667mV (R6 정확값)
-#define     C_CellTempOV_Warn                              55.0   //26.05.30기준 WrnCellOt 55도
-//#define     C_CellTempOV_WarnRst                           52.25  //26.05.30기준 release 52.25도
-//#define     C_CellTempOV_WarnRst                           52.3   // TODO : [�뒠�떇] 260809_Note1, 0.15 �빐�젣 52.3�룄(�냼�닔1)
-#define     C_CellTempOV_WarnRst                           52.25  // TODO : [튜닝] 260827_Note1, 0.16 WrnCellOt 해제 52.25도 (R6 정확값)
-//#define     C_CellTempUN_Warn                             -20.0   //26.05.30湲곗� WrnCellUt -20�룄
-#define     C_CellTempUN_Warn                        -20.0  // TODO : [원복] 260901_Note1, 0.18 저온경고 WrnCellUt -20도 (스왑 되돌림)
-//#define     C_CellTempUN_WarnRst                           0.0    //26.05.30기준 release 0도
-//#define     C_CellTempUN_WarnRst                          -19.0   //260809 WrnCellUt �빐�젣(�뒪�솑 �쟾)
-//#define     C_CellTempUN_WarnRst                          -23.8   // TODO : [�뒠�떇] 260809_Note1, 0.15 WrnCellUt �빐�젣 -23.8�룄 (�뒪�솑, �엳�뒪�뀒由ъ떆�뒪 �쑀吏�)
-#define     C_CellTempUN_WarnRst                          -23.75  // TODO : [튜닝] 260827_Note1, 0.16 WrnCellUt 해제 -23.75도 (R6 정확값)
-#define     C_CellTempDIV_Warn                             10.0   //26.05.30기준 WrnCellUnbalTmp 10도
-#define     C_CellTempDIV_WarnRst                          5.0    //26.05.30기준 release 5도
+//Warning(Alarm) Set Vaule   _Warn=Trigger, _WarnRst=Release(히스테리시스)
+#define     C_PackCTOV_Warn                                450.0  // 과전류 경고 : 초기값
+#define     C_PackCTOV_WarnRst                             405.0  // 과전류 해제 : 초기값
+#define     C_PackSOCOV_Warn                               95.0   // 과충전 경고 : 100.0(초기)->95.0(V0.15)
+#define     C_PackSOCOV_WarnRst                            92.15  // 과충전 해제 : 97.0(초기)->92.2(V0.15)->92.15(V0.16)
+#define     C_PackSOCUN_Warn                               5.0    // 저충전 경고 : 초기값
+#define     C_PackSOCUN_WarnRst                            5.25   // 저충전 해제 : 초기값
+#define     C_PackVoltOV_Warn                              90.86  // 팩 과전압 경고 : 90.2(초기)->90.9(V0.15)->90.86(V0.16)
+#define     C_PackVoltOV_WarnRst                           88.1342 // 팩 과전압 해제 : 87.494(초기)->88.1(V0.15)->88.1342(V0.16)
+#define     C_PackVoltUN_Warn                              65.45  // 팩 저전압 경고 : 66.0(초기)->65.45(V0.19, 셀2.975x22S)
+#define     C_PackVoltUN_WarnRst                           68.7   // 팩 저전압 해제 : 69.3(초기)->68.7(V0.19, 히스5%)
+#define     C_PackTempOV_Warn                              47.0   // 팩 고온 경고 : 초기값
+#define     C_PackTempOV_WarnRst                           44.65  // 팩 고온 해제 : 44.65(초기)->44.7(V0.15)->44.65(V0.16)
+#define     C_PackTempUN_Warn                              -20.0  // 팩 저온 경고 : -25.0(초기)->-20.0(V0.15)->-25.0(V0.18)->-20.0(V0.19)
+#define     C_PackTempUN_WarnRst                           -19.0  // 팩 저온 해제 : 0.0(초기)->-19.0(V0.15)->-23.8(V0.18)->-19.0(V0.19)
+#define     C_CellVoltOV_Warn                              4.15   // 셀 과전압 경고 : 4.10(초기)->4.15(V0.15)
+#define     C_CellVoltOV_WarnRst                           4.12925 // 셀 과전압 해제 : 4.0795(초기)->4.129(V0.15)->4.12925(V0.16)
+#define     C_CellVoltUN_Warn                              3.00   // 셀 저전압 경고 : 초기값
+#define     C_CellVoltUN_WarnRst                           3.015  // 셀 저전압 해제 : 초기값
+#define     C_CellVoltDIV_Warn                             0.2    // 셀 전압편차 경고 : 초기값(200mV)
+#define     C_CellVoltDIV_WarnRst                          0.0666667 // 셀 전압편차 해제 : 0.02(초기)->0.1(V0.12)->0.067(V0.15)->0.0666667(V0.16)
+#define     C_CellTempOV_Warn                              55.0   // 셀 고온 경고 : 초기값
+#define     C_CellTempOV_WarnRst                           52.25  // 셀 고온 해제 : 52.25(초기)->52.3(V0.15)->52.25(V0.16)
+#define     C_CellTempUN_Warn                              -25.0  // 셀 저온 경고 : -20.0(초기)->-25.0(V0.15)->-20.0(V0.18)->-25.0(V0.19)
+#define     C_CellTempUN_WarnRst                           -23.5  // 셀 저온 해제 : 0.0(초기)->-23.8(V0.15)->-23.75(V0.16)->-23.5(V0.19, 표준율6%)
+#define     C_CellTempDIV_Warn                             10.0   // 셀 온도편차 경고 : 초기값
+#define     C_CellTempDIV_WarnRst                          5.0    // 셀 온도편차 해제 : 초기값
 
 //Warning(Alarm) Hold Time (유지시간 카운트, 루프1ms 기준). 항목별 개별 변경 가능
 #define     C_PackCTOV_WarnDelay        100    //idx0 과전류
@@ -556,17 +425,7 @@ Parameter
 #define     C_PackVoltUN_WarnDelay      100    //idx4 팩저전압
 #define     C_PackTempOV_WarnDelay      100    //idx5 팩과온
 #define     C_PackTempUN_WarnDelay      100    //idx6 팩저온
-/*--------------------------------------------------------------
- * 260827 : 불평형(피크초과) 파워 경고 유지시간 100 → 1000 ms.
- *          「1초 이상 초과 시 알람」 요구 반영.
- *--------------------------------------------------------------*/
-//#define     C_PackUnbalPwr_WarnDelay    100    //idx7 遺덊룊�삎�뙆�썙(�쁽�옱 誘몄궗�슜)
-/*--------------------------------------------------------------
- * 260827 : 보호설정표 R6 — Bsa_WrnUnbalPwr 유지시간 10 Sec 확정.
- *          설정표 Delay 100ms 는 표 양식상 값이며 유지시간 10초에 포함.
- *--------------------------------------------------------------*/
-//#define     C_PackUnbalPwr_WarnDelay    1000   // TODO : [튜닝] 260827_Note1, 0.16 WrnUnbalPwr 1sec 유지 (연속 전류 한계 초과, 단위 A)
-#define     C_PackUnbalPwr_WarnDelay    10000  // TODO : [튜닝] 260827_Note1, 0.16 WrnUnbalPwr 10sec 유지 (전류제한 초과, 단위 A, R6 반영)
+#define     C_PackUnbalPwr_WarnDelay    10000  //idx7 전류한계 초과 : 100(초기)->1000->10000(V0.16, 10초)
 #define     C_CellVoltOV_WarnDelay      100    //idx8 셀과전압
 #define     C_CellVoltUN_WarnDelay      100    //idx9 셀저전압
 #define     C_CellVoltDIV_WarnDelay     100    //idx10 셀전압편차
