@@ -82,8 +82,8 @@ Next, definitions used in main file.
 #define         IS_ABOVE_AND_UNDER(A, MIN, MAX)  ((A) >  (MIN) && (A) <= (MAX))  // 초과 ~ 이하
 #define         IS_OVER_AND_BELOW(A, MIN, MAX)   ((A) >= (MIN) && (A) <  (MAX))  // 이상 ~ 미만
 #define         IS_ABOVE_AND_BELOW(A, MIN, MAX)  ((A) >  (MIN) && (A) <  (MAX))  // 초과 ~ 미만
-#define         Hyst_On(Value, SetValue)   ((Value) > (SetValue))   // 켜짐 조건
-#define         Hyst_Off(Value, RstValue)  ((Value) < (RstValue))   // 꺼짐 조건
+#define         Hyst_On(Value, SetValue)   ((Value) >= (SetValue))   // 켜짐 조건
+#define         Hyst_Off(Value, RstValue)  ((Value) <= (RstValue))   // 꺼짐 조건
 
 #define BIT_MASK(bit)           (1 << (bit))
 #define GetBit(val, bit)        (((val) & BIT_MASK(bit)) >> (bit))
@@ -193,7 +193,6 @@ union DigitalOutPut_REG
 };
 struct SystemState_BIT
 {       // bits   description
-
     unsigned int     SysSTATE            :3; // 0,1,2
     unsigned int     BalanceMode         :1; // 3
     unsigned int     SysAalarm           :1; // 4
@@ -275,7 +274,13 @@ struct SystemFault_BIT
     unsigned int     CellTemp_UN         :1; // 12
     unsigned int     CellTemp_BL         :1; // 13
     unsigned int     PackRLY_ERR         :1; // 14
-    unsigned int     PackFcu_CANErr      :1; // 15  // TODO : [검증] 260807_Note1, 0.15 FCU CAN 통신 에러(R9 @31 PrtctCanTmOut)
+    /*--------------------------------------------------------------
+     * 260827 : 규약 CAN31 Bsa_PrtctCanTmOut 보호 판정 제외 — 예약비트화
+     *          통신에러는 Alarm(CAN14 BSA_Wn_FCUCAN_ERR)으로만 보고하고
+     *          BAT80VFaultReg.all != 0 판정에서 제외 (고객사 요구)
+     *--------------------------------------------------------------*/
+    //unsigned int     PackFcu_CANErr      :1; // 15  // TODO : [검증] 260807_Note1, 0.15 FCU CAN 통신 에러(R9 @31 PrtctCanTmOut)
+    unsigned int     FAULT15             :1; // 15  // TODO : [검증] 260827_Note1, 0.16 규약 CAN31 예약비트(보호 판정 제외)
     unsigned int     CellIR_OV           :1; // 16
     unsigned int     PackOcTime_Err      :1; // 17
     unsigned int     PrtcOcEvent_Err     :1; // 18
@@ -316,7 +321,11 @@ struct SystemProtect_BIT
      *          bit15 PackISO_ERR → PrtctCanTmOut, bit16~20 추가
      *--------------------------------------------------------------*/
     //unsigned int     PackISO_ERR         :1; // 15
-    unsigned int     PackFcu_CANErr      :1; // 15  // TODO : [검증] 260807_Note1, 0.15 FCU CAN 통신 에러(R9 @31 PrtctCanTmOut)
+    /*--------------------------------------------------------------
+     * 260827 : SystemFault_BIT와 동일 구성 유지 — bit15 예약비트화
+     *--------------------------------------------------------------*/
+    //unsigned int     PackFcu_CANErr      :1; // 15  // TODO : [검증] 260807_Note1, 0.15 FCU CAN 통신 에러(R9 @31 PrtctCanTmOut)
+    unsigned int     FAULT15             :1; // 15  // TODO : [검증] 260827_Note1, 0.16 규약 CAN31 예약비트(보호 판정 제외)
     unsigned int     CellIR_OV           :1; // 16
     unsigned int     PackOcTime_Err      :1; // 17
     unsigned int     PrtcOcEvent_Err     :1; // 18
@@ -378,6 +387,15 @@ typedef struct System_Date
     Uint16  SysCanRxCount;
     Uint16  AlarmStatecount;
     Uint16  Bat80VAlarmCont[32];
+    /*--------------------------------------------------------------
+     * 260827 : FAULT 유지시간 카운터를 Alarm(Bat80VAlarmCont[])과 동일한
+     *          배열 방식으로 통일. 인덱스 = BAT80VFaultReg 비트번호.
+     *          [0]PackOC   [1]SOC_OV   [2]SOC_UN   [3]PackVolt_OV
+     *          [4]PackVolt_UN [5]PackTemp_OV [6]PackTemp_UN [7]UnPWR_BL(미구현)
+     *          [8]CellVolt_OV [9]CellVolt_UN [10]CellVolt_BL
+     *          [11]CellTemp_OV [12]CellTemp_UN [13]CellTemp_BL
+     *--------------------------------------------------------------*/
+    Uint16  BatFalutCont[32];   // TODO : [검증] 260827_Note1, 0.16 FAULT 유지시간 카운터 배열(개별변수 대체)
     Uint16  Bat80VFaultStatecount;
     Uint16  Bat12VFaultStatecount;
     Uint16  ProtectStatecount;
@@ -404,11 +422,11 @@ typedef struct System_Date
     float32 Bat80VCellAgvTemperatureF;
     Uint16  Bat80TemperatureMaxNum;
     Uint16  Bat80TemperatureMinNum;
-    float32 Bat80VCHAPWRContintyF;
-    float32 Bat80VDisCHAPWRContintyF;
-    float32 Bat80VCHAPWRPeakF;
-    float32 Bat80VDisCHAPWRPeakF;
-    float32 Bat80VUnbalPwr;
+    float32 Bat80VCHAContintyCurrF;
+    float32 Bat80VDisCHAContintyCurrF;
+    float32 Bat80VCHAPeakFCurrF;
+    float32 Bat80VDisCHAPeakFCurrF;
+    float32 Bat80VUnbalCurrentF;   // TODO : [검증] 260827_Note1, 0.16 연속 전류 한계 대비 초과분[A] (+ = 초과)
     float32 Bat80VSOCF;
     float32 Bat80VSOHF;
     float32 Bat80VAhF;
@@ -437,13 +455,26 @@ typedef struct System_Date
 
 
     //
-    unsigned int  BAPackOCCount;
-    unsigned int  BAPackOVCount;
-    unsigned int  BAPackUVCount;
-    unsigned int  BACellOVCount;
-    unsigned int  BACellUVCount;
-    unsigned int  BACellUBVCount;
-    unsigned int  BACellUBTCount;
+    unsigned int  BAPackOCCount;      /* 최대 전류 시간(480A 10초) 전용 — 유지시간 카운터 배열과 별도 */
+    /*--------------------------------------------------------------
+     * 260827 : 최대 전류 반복(Bsa_FltOcTime_min, 1분당 5회) 신규 — 진입 순간 검출과
+     *          1분 집계 창 전용 변수. 이벤트 수는 BatFalutCont[18] 사용.
+     *--------------------------------------------------------------*/
+    unsigned int  BAPackOCOld;        // TODO : [검증] 260827_Note1, 0.16 480A 진입 edge 검출용 이전상태
+    unsigned int  BAPackOCEventTimer; // TODO : [검증] 260827_Note1, 0.16 1분 집계 창 잔여시간(ms)
+    /*--------------------------------------------------------------
+     * 260827 : FAULT 유지시간 카운터 개별변수 → BatFalutCont[] 배열로 전환.
+     *          SOC/온도 6항목은 카운터가 없어 _FaultDelay 가 무효였고,
+     *          나머지는 변수명이 제각각이라 Alarm 방식으로 통일.
+     *          ※ BAPackOCCount(OC 1sec 타이머)는 성격이 달라 존치.
+     *--------------------------------------------------------------*/
+    //unsigned int  BAPackOCFltCount;   // TODO : [검증] 260827_Note1, 0.16 과전류 FAULT 유지시간 전용 카운터(BAPackOCCount는 OC타이머가 사용)
+    //unsigned int  BAPackOVCount;
+    //unsigned int  BAPackUVCount;
+    //unsigned int  BACellOVCount;
+    //unsigned int  BACellUVCount;
+    //unsigned int  BACellUBVCount;
+    //unsigned int  BACellUBTCount;
 
     SysState    SysMachine;
     union       ParentDeviceCMD_REG         PMSysCMDResg;
@@ -644,10 +675,17 @@ typedef struct CANA_DATA
     int16  BAT80VFaultCT;
    // int16  BAT80VCTFaultVaule;
     Uint16 BAT80VPT;
-    Uint16 BAT80VCHAPWRContinty;
-    Uint16 BAT80VCHAPWRPeak;
-    Uint16 BAT80VDisCHAPWRContinty;
-    Uint16 BAT80VDisCHAPWRPeak;
+    Uint16 BAT80VCHAContintyCurr;
+    Uint16 BAT80VCHAPeakCurr;
+    /*--------------------------------------------------------------
+     * 260827 : 전류 극성 규약 반영 — 충전 = 양(+), 방전 = 음(-).
+     *          방전 전류한계는 규약(R11)상 부호 있는 음수(-700~0 A)이므로
+     *          BAT80VCT 와 동일하게 int16 으로 변경.
+     *--------------------------------------------------------------*/
+    //Uint16 BAT80VDisCHAContintyCurr;
+    //Uint16 BAT80VDisCHAPeakCurr;
+    int16  BAT80VDisCHAContintyCurr;   // TODO : [검증] 260827_Note1, 0.16 방전 연속한계 음수 송신
+    int16  BAT80VDisCHAPeakCurr;       // TODO : [검증] 260827_Note1, 0.16 방전 피크한계 음수 송신
     Uint16 BAT80VoltageMax;
     Uint16 BAT80VoltageMin;
     Uint16 BAT80VoltageAgv;
@@ -685,10 +723,17 @@ typedef struct CANA_DATA
     int16  BAT12VSOC;
     Uint16 BAT12VSOH;
     Uint16 BAT12VAh;
-    Uint16 BAT12VCHAPWRContinty;
-    Uint16 BAT12VCHAPWRPeak;
-    Uint16 BAT12VDisCHAPWRContinty;
-    Uint16 BAT12VDisCHAPWRPeak;
+    Uint16 BAT12VCHAContintyCurr;
+    Uint16 BAT12VCHAPeakCurr;
+    /*--------------------------------------------------------------
+     * 260827 : 80V 계열과 동일한 전류 극성 규약 적용 — 충전 = 양(+),
+     *          방전 = 음(-). 방전 전류한계는 부호 있는 값이므로 int16 으로 변경.
+     *          ※ 12V 계열은 현재 선언·초기화만 있고 산출/송신 경로 없음.
+     *--------------------------------------------------------------*/
+    //Uint16 BAT12VDisCHAContintyCurr;
+    //Uint16 BAT12VDisCHAPeakCurr;
+    int16  BAT12VDisCHAContintyCurr;   // TODO : [검증] 260827_Note1, 0.16 방전 연속한계 음수(80V 계열과 동일)
+    int16  BAT12VDisCHAPeakCurr;       // TODO : [검증] 260827_Note1, 0.16 방전 피크한계 음수(80V 계열과 동일)
     Uint16 BAT12VoltageMax;
     Uint16 BAT12VoltageMin;
     Uint16 BAT12VoltageAgv;

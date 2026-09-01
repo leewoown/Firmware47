@@ -65,6 +65,8 @@ void CalSocHandle(SocReg *P);
 void Cal80VSysFaultCheck(SystemReg *s);
 void Cal80VSysAlarmtCheck(SystemReg *s);
 void PWRHoldHandle(SystemReg *s);
+void PackCurrentLimit(SystemReg *s);   // TODO : [검증] 260827_Note1, 0.16 Safety Current Limit 산출
+float32 PackLimitLookupF(const float32 *Table, Uint16 TempIdx, float32 TempRate, Uint16 SocIdx, float32 SocRate);   // TODO : [검증] 260827_Note1, 0.16 전류한계 표 bilinear 보간 헬퍼
 
 
 void NVRAM_AZoneSaveHandler(NVRZoneAReg *p);
@@ -195,6 +197,15 @@ void main(void)
     SysCtrlRegs.XCLK.bit.XCLKOUTDIV = 2; //XCLOCKOUT = SYSCLK
     InitSpiGpio();
     InitSpi();
+    /*--------------------------------------------------------------
+     * 260831 : NVR_Init() 호출 추가(F-1). 쓰기보호(BP) 해제 함수가
+     *          정의만 되어 있고 호출처가 없어, 보호가 걸린 칩에서는
+     *          WRITE 가 전부 무시되어 LastSOC 가 갱신되지 않았다.
+     *          이어서 write→read 왕복 자체 진단을 1회 수행한다(F-3).
+     *          결과는 NVRAllRegs.SRStatus / NvrOk 로 확인.
+     *--------------------------------------------------------------*/
+    NVR_Init();                     // TODO : [검증] 260831_Note1, 0.18 F-1 쓰기보호 해제
+    NVRAM_SelfTest();               // TODO : [검증] 260831_Note1, 0.18 F-3 부팅 1회 왕복 진단
     InitECanGpio();
     InitECan();
 
@@ -465,8 +476,26 @@ void main(void)
                   * 4. 시스템 SOC 반영
                   *----------------------------------------*/
                  Farasis56AhSocRegs.delta = fabs(Farasis56AhSocRegs.SOCbufF - Farasis56AhSocRegs.NVRSocInitF);
+                 /*--------------------------------------------------------------
+                  * 260831 : 휴지 중 전압 변화 판정 추가(F-5).
+                  *          차단 직전 셀전압(LastCellV)과 부팅 시 셀전압이 5mV 이내면
+                  *          그 사이 상태 변화가 없었다고 보고 NVR 값을 그대로 이어받는다.
+                  *          Relaxation 미수렴 전압으로 OCV 재추정하는 것을 막는 것이
+                  *          목적이며, 휴지시간 계측(RTC) 없이 전압만으로 판단한다.
+                  *          LastCellV = 0 은 값이 없는 경우(구버전·무효)라 제외.
+                  *--------------------------------------------------------------*/
+                 Farasis56AhSocRegs.NvrAdopted   = 0u;
+                 Farasis56AhSocRegs.RestVoltDiffF = fabs((Farasis56AhSocRegs.CellAgvVoltageF * 1000.0F)
+                                                        - (float32)NVRZoneARDRegs.LastCellV);   // TODO : [검증] 260831_Note1, 0.18 F-5
                  /* OCV 값은 SOCbufF 사용 (이미 계산된 값) */
-                 if((Farasis56AhSocRegs.SOCbufF >= C_SocOCVLinearMinF) && (Farasis56AhSocRegs.SOCbufF <= C_SocOCVLinearMaxF))
+                 if((Farasis56AhSocRegs.NVRSocInitF >= 0.0F) &&                              /* NVR 유효 */
+                    (NVRZoneARDRegs.LastCellV != 0u) &&                                      /* 저장된 전압 있음 */
+                    (Farasis56AhSocRegs.RestVoltDiffF <= C_SocRestCellVoltDiffmV))           /* 전압 변화 없음 */
+                 {
+                     Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;        // TODO : [검증] 260831_Note1, 0.18 F-5 NVR 우선
+                     Farasis56AhSocRegs.NvrAdopted  = 1u;
+                 }
+                 else if((Farasis56AhSocRegs.SOCbufF >= C_SocOCVLinearMinF) && (Farasis56AhSocRegs.SOCbufF <= C_SocOCVLinearMaxF))
                  {
                     //  /* TODO: 한글 주석 복구 필요(원본 인코딩 손상) */
                     //  if(Farasis56AhSocRegs.delta > 20.0F)
@@ -514,7 +543,14 @@ void main(void)
                  /*----------------------------------------
                   * 초기 상태 정렬 (중요)
                   *----------------------------------------*/
-                 Farasis56AhSocRegs.SysAhF    = 0.0F;
+                 /*--------------------------------------------------------------
+                  * 260831 : F-7(적산분 복원) 미반영 — 현행 0 리셋이 맞다.
+                  *          NVR 의 LastSOC 는 SysSocInitF + 적산분이 이미 더해진
+                  *          최종 SOC(Bat80VSOCF) 라서, 여기서 SysAhF 까지 되살리면
+                  *          SysSOCF = SysSocInitF + SysAhF 계산에서 적산분이
+                  *          두 번 더해진다. LastAh 는 이력 확인용으로만 저장한다.
+                  *--------------------------------------------------------------*/
+                 Farasis56AhSocRegs.SysAhF    = 0.0F;   // TODO : [검증] 260831_Note1, 0.18 F-7 검토 결과 현행 유지
                  Farasis56AhSocRegs.SysAhOldF = 0.0F;
                  Farasis56AhSocRegs.SysAhNewF = 0.0F;
                  /* 최종 SOC */
@@ -800,6 +836,13 @@ void main(void)
                       NVRZoneAWRRegs.SysTimeTick++;
                       NVRZoneAWRRegs.LastState = SysRegs.BAT80VStateReg.all;
                       NVRZoneAWRRegs.LastSOC   = (int16)(SysRegs.Bat80VSOCF * 10.0F);
+                      /*--------------------------------------------------------------
+                       * 260831 : 재기동 판정용 부가 정보 저장(F-5/F-7).
+                       *          LastCellV 는 부팅 시 전압 변화 판정에 쓰이고,
+                       *          LastAh 는 적산 이력 확인용으로 남긴다.
+                       *--------------------------------------------------------------*/
+                      NVRZoneAWRRegs.LastCellV = (Uint16)(SysRegs.Bat80VCellAgvVoltageF * 1000.0F);   // TODO : [검증] 260831_Note1, 0.18 F-5
+                      NVRZoneAWRRegs.LastAh    = (int16)(Farasis56AhSocRegs.SysAhF * 10.0F);          // TODO : [검증] 260831_Note1, 0.18 F-7 기록용
                       NVRAM_AZoneSaveHandler(&NVRZoneAWRRegs);
                       NVRAllRegs.SEQ=NVRAM_AZoneRead;
                       NVRAllRegs.DebugCount++;
@@ -898,6 +941,12 @@ interrupt void cpu_timer0_isr(void)
        Farasis56AhSocRegs.CellAgvVoltageF = SysRegs.Bat80VCellAgvVoltageF;
        Farasis56AhSocRegs.SysSoCCTF       = SysRegs.Bat80VCurrentF;
        Farasis56AhSocRegs.SysSoCCTAbsF    = SysRegs.Bat80VCurrentAsbF;
+       /*--------------------------------------------------------------
+        * 260831 : 운전 중 OCV 완만 보정(F-6) 진입 조건 입력 전달.
+        *--------------------------------------------------------------*/
+       Farasis56AhSocRegs.CellTempF       = SysRegs.Bat80VCellAgvTemperatureF;   // TODO : [검증] 260831_Note1, 0.18 F-6
+       Farasis56AhSocRegs.CellDivVoltF    = SysRegs.Bat80VCellDivVoltageF;       // TODO : [검증] 260831_Note1, 0.18 F-6
+       Farasis56AhSocRegs.SysStateNo      = (Uint16)SysRegs.SysMachine;          // TODO : [검증] 260831_Note1, 0.18 F-6
        CalSocHandle(&Farasis56AhSocRegs);
        SysRegs.Bat80VSOCF = Farasis56AhSocRegs.SysSOCF;
    }
@@ -1027,7 +1076,7 @@ interrupt void cpu_timer0_isr(void)
                CANARegs.BAT80VDigitalOutPutReg.bit.PRlyOUT   = PrtectRelayRegs.State.bit.PRelayDO;
                CANARegs.BAT80VAh                             = (int)(Farasis56AhSocRegs.SysAhF*10);
                SysRegs.BAT80VStateReg.bit.SocMode            = Farasis56AhSocRegs.SoCStateRegs.bit.CalMeth;
-               SysRegs.BAT80VStateReg.bit.SysSTATE           = SysRegs.SysMachine;   // TODO : [검증] 2606.088_Note1, 0.15 상태머신 보고(Init/Ready/Running/Protecter)
+               SysRegs.BAT80VStateReg.bit.SysSTATE           = SysRegs.SysMachine;   // TODO : [검증] 260808_Note1, 0.16 상태머신 보고(Init/Ready/Running/Protecter)
                if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                {
                  CANATX(0x602,8,CANARegs.BAT80VStatus.all,CANARegs.BAT80VDigitalOutPutReg.all,CANARegs.BAT80VAh,SysRegs.BAT80VStateReg.all);
@@ -1122,42 +1171,72 @@ interrupt void cpu_timer0_isr(void)
                      * 260808 : PackFcu_CANErr 검출을 버전별 분기
                      *          VER<16(0.15) → Fault(차단), VER>=16 → Alarm(경고)
                      *--------------------------------------------------------------*/
-                #if (Product_Version < 16)
-                    SysRegs.BAT80VFaultReg.bit.PackFcu_CANErr=1;   // TODO : [검증] 260808_Note1, 0.15 VER15 통신끊김 Fault(차단)
-                #else
-                    SysRegs.BAT80VAlarmReg.bit.PackFcu_CANErr=1;   // VER16+ 통신끊김 Alarm(경고)
-                #endif
+                /*--------------------------------------------------------------
+                 * 260827 : Fault bit15 예약비트(FAULT15)화로 VER 분기 폐지
+                 *          통신에러는 Alarm 단일 경로로만 보고 (고객사 요구)
+                 *--------------------------------------------------------------*/
+                //#if (Product_Version < 16)
+                //    SysRegs.BAT80VFaultReg.bit.PackFcu_CANErr=1;   // TODO : [검증] 260808_Note1, 0.15 VER15 통신끊김 Fault(차단)
+                //#else
+                    SysRegs.BAT80VAlarmReg.bit.PackFcu_CANErr=1;   // TODO : [검증] 260827_Note1, 0.16 통신끊김 Alarm 단일화(Fault 경로 폐지)
+                //#endif
                     SysRegs.SysCanRxCount=11000;
                 }
                 else
                 {
-                #if (Product_Version < 16)
-                    SysRegs.BAT80VFaultReg.bit.PackFcu_CANErr=0;
-                #else
-                    SysRegs.BAT80VAlarmReg.bit.PackFcu_CANErr=0;   // TODO : [검증] 260715_Note1, 0.12 수신워치독<10(통신정상)이면 통신알람 해제
-                #endif
+                //#if (Product_Version < 16)
+                //    SysRegs.BAT80VFaultReg.bit.PackFcu_CANErr=0;
+                //#else
+                    SysRegs.BAT80VAlarmReg.bit.PackFcu_CANErr=0;   // TODO : [검증] 260827_Note1, 0.16 수신워치독<10(통신정상)이면 통신알람 해제(Fault 분기 폐지)
+                //#endif
                 }
        break;
        case 8:
                 //At 80MHZ, operation time is 0.151msec
                if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                {
-                   CANATX(0x603,8,SysRegs.BAT80VAlarmReg.all,SysRegs.BAT80VFaultReg.Word.DataL,SysRegs.BAT80VFaultReg.Word.DataH,0X0000);
+                
+                   /*--------------------------------------------------------------
+                    * 260827 : 상위워드 강제 0 제거 — 규약 Protection bit32~39
+                    *          (CellIR_OV/PackOcTime_Err/PrtcOcEvent_Err 등)가 항상 0으로
+                    *          송신되고, FaultReg 원본까지 100ms마다 지워지던 문제.
+                    *          현재 상위비트는 set 로직이 없어 값 변화는 없음(규약 정합만 확보).
+                    *--------------------------------------------------------------*/
+                   //SysRegs.BAT80VFaultReg.Word.DataH=0X0000; // TODO : [검증] 260808_Note1, 0.15 VER15, VER17 이상 버전, 삭제
+                   CANATX(0x603,8,SysRegs.BAT80VAlarmReg.all,SysRegs.BAT80VFaultReg.Word.DataL,SysRegs.BAT80VFaultReg.Word.DataH,0X0000);   // TODO : [검증] 260827_Note1, 0.16 Protection bit16~39 원본 그대로 송신
                }
+       break;
+       case 10:
+                /*--------------------------------------------------------------
+                 * 260827 : 전력한계 고정값 → P56 Safety Current Limit 표 기반
+                 *          동적 산출로 변경. 온도/SOC가 느리게 변하므로 100ms
+                 *          주기로만 갱신하고, 다음 슬롯(case 11)에서 송신한다.
+                 *--------------------------------------------------------------*/
+                if(SysRegs.BAT80VStateReg.bit.INITOK==1)
+                {
+                    PackCurrentLimit(&SysRegs);   // TODO : [검증] 260827_Note1, 0.16 온도·SOC 기반 충/방전 허용전류[A] 갱신
+                }
        break;
        case 11:
                 //At 80MHZ, operation time is 0.151msec
                if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                {
-                 SysRegs.Bat80VCHAPWRContintyF    =  12.2;
-                 SysRegs.Bat80VDisCHAPWRContintyF =  8.6;
-                 SysRegs.Bat80VCHAPWRPeakF = 20.2;
-                 SysRegs.Bat80VDisCHAPWRPeakF = 12.2;
-                 CANARegs.BAT80VCHAPWRContinty    = (unsigned int)(SysRegs.Bat80VCHAPWRContintyF*10);
-                 CANARegs.BAT80VDisCHAPWRContinty = (unsigned int)(SysRegs.Bat80VDisCHAPWRContintyF*10);
-                 CANARegs.BAT80VCHAPWRPeak        = (unsigned int)(SysRegs.Bat80VCHAPWRPeakF*10);
-                 CANARegs.BAT80VDisCHAPWRPeak     = (unsigned int)(SysRegs.Bat80VDisCHAPWRPeakF*10);
-                 CANATX(0x604,8,CANARegs.BAT80VCHAPWRContinty,CANARegs.BAT80VDisCHAPWRContinty,CANARegs.BAT80VCHAPWRPeak,CANARegs.BAT80VDisCHAPWRPeak);
+                 //SysRegs.Bat80VCHAContintyCurrF    =  12.2;   // TODO : [삭제] 260827_Note1, 0.16 고정값 폐지(PackCurrentLimit 산출로 대체)
+                 //SysRegs.Bat80VDisCHAContintyCurrF =  8.6;    // TODO : [삭제] 260827_Note1, 0.16 고정값 폐지
+                 //SysRegs.Bat80VCHAPeakFCurrF = 20.2;           // TODO : [삭제] 260827_Note1, 0.16 고정값 폐지
+                 //SysRegs.Bat80VDisCHAPeakFCurrF = 12.2;        // TODO : [삭제] 260827_Note1, 0.16 고정값 폐지
+                 /*--------------------------------------------------------------
+                  * 260827 : 전류 극성 규약 반영 — 충전 = 양(+), 방전 = 음(-).
+                  *          PackCurrentLimit 는 판정 편의상 4종 모두 크기(양수)로
+                  *          보관하므로, 송신 시점에만 방전에 -1 을 곱한다.
+                  *--------------------------------------------------------------*/
+                 //CANARegs.BAT80VDisCHAContintyCurr = (unsigned int)(SysRegs.Bat80VDisCHAContintyCurrF*10);
+                 //CANARegs.BAT80VDisCHAPeakCurr     = (unsigned int)(SysRegs.Bat80VDisCHAPeakFCurrF*10);
+                 CANARegs.BAT80VCHAContintyCurr    = (unsigned int)( SysRegs.Bat80VCHAContintyCurrF*10);      // TODO : [검증] 260827_Note1, 0.16 충전 연속한계[0.1A], 양(+)
+                 CANARegs.BAT80VDisCHAContintyCurr = (int)(-1.0F * SysRegs.Bat80VDisCHAContintyCurrF*10);     // TODO : [검증] 260827_Note1, 0.16 방전 연속한계[0.1A], 음(-)으로 반전
+                 CANARegs.BAT80VCHAPeakCurr        = (unsigned int)( SysRegs.Bat80VCHAPeakFCurrF*10);          // TODO : [검증] 260827_Note1, 0.16 충전 피크한계[0.1A], 양(+)
+                 CANARegs.BAT80VDisCHAPeakCurr     = (int)(-1.0F * SysRegs.Bat80VDisCHAPeakFCurrF*10);         // TODO : [검증] 260827_Note1, 0.16 방전 피크한계[0.1A], 음(-)으로 반전
+                 CANATX(0x604,8,CANARegs.BAT80VCHAContintyCurr,CANARegs.BAT80VDisCHAContintyCurr,CANARegs.BAT80VCHAPeakCurr,CANARegs.BAT80VDisCHAPeakCurr);
                }
        break;
        case 14:

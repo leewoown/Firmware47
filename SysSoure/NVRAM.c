@@ -21,6 +21,7 @@ volatile Uint32 g_SysTimeTick  = 0U;
 
 extern void SPI_Write(unsigned int WRData);
 extern unsigned int SPI_Read(void);
+extern NVRAllReg NVRAllRegs;                 // TODO : [검증] 260831_Note1, 0.18 진단값(SRStatus/NvrOk) 기록용
 extern void NVRAM_StateTest(void);
 extern void NVRAM_ForceResetSysTimeTick(void);
 extern void NVRAM_AZoneSaveHandler(NVRZoneAReg *p);
@@ -109,9 +110,44 @@ void NVRAM_StateTest(void)
             break;
     }
 }
+/*--------------------------------------------------------------
+ * 260831 : NVRAM 자체 진단 신규(F-3).
+ *          기존 NVRAM_StateTest() 는 패턴 생성 for 본문·상태 전이·비교 루프가
+ *          모두 주석 처리되어 검증 기능이 없었고 호출처도 없었다.
+ *          여기서는 부팅 1회 write→read 왕복을 그 자리에서 끝내고 결과만
+ *          NVRAllRegs.NvrOk 에 남긴다(1=정상). 상태머신을 쓰지 않는다.
+ *          진단 주소는 로그 영역을 침범하지 않는 NVR_SELFTEST_ADDR(0x0000E0).
+ *          ※ 실행 전 NVR_Init() 으로 쓰기보호가 풀려 있어야 한다.
+ *--------------------------------------------------------------*/
+void NVRAM_SelfTest(void)
+{
+    Uint16 k;
+
+    for(k = 0U; k < TEST_LEN; k++)
+    {
+        txBuf[k] = (Uint8)(k + 1U);                  // TODO : [검증] 260831_Note1, 0.18 패턴 생성(구 코드는 본문이 주석이라 누락)
+    }
+
+    NVR_SPIWrite(NVR_WREN_CMD,  NVR_NO_ADDR,       (Uint8*)0, 0U);
+    NVR_SPIWrite(NVR_WRITE_CMD, NVR_SELFTEST_ADDR, txBuf,     TEST_LEN);
+
+    memset(rxBuf, 0, TEST_LEN);
+    NVR_SPIRead (NVR_READ_CMD,  NVR_SELFTEST_ADDR, rxBuf,     TEST_LEN);
+
+    TestError = 0U;
+    for(k = 0U; k < TEST_LEN; k++)
+    {
+        if(txBuf[k] != rxBuf[k])
+        {
+            TestError = 1U;                          // TODO : [검증] 260831_Note1, 0.18 비교 복구
+            break;
+        }
+    }
+    NVRAllRegs.NvrOk = (TestError == 0U) ? 1U : 0U;  // TODO : [검증] 260831_Note1, 0.18 1=왕복 일치
+}
 void NVRAM_AZoneSaveHandler(NVRZoneAReg *p)
 {
-    static Uint8 buf[32];
+    static Uint8 buf[NVR_META_BYTES];   // TODO : [검증] 260831_Note1, 0.18 32 → 36 byte (LastCellV/LastAh 추가)
     if(p == (NVRZoneAReg*)0)
     {
         return;
@@ -167,25 +203,43 @@ void NVRAM_AZoneSaveHandler(NVRZoneAReg *p)
     buf[30] = (Uint8)((p->LastEventTimestamp >> 16) & 0xFFU);  // Byte2
     buf[31] = (Uint8)((p->LastEventTimestamp >> 24) & 0xFFU);  // Byte3 (MSB)
 
+    /*--------------------------------------------------------------
+     * 260831 : 재기동 SOC 점프 대책 — 차단 직전 상태를 함께 남긴다.
+     *          LastCellV [mV] : 휴지 중 전압 변화 판정용 (F-5)
+     *          LastAh  [0.1Ah] : 적산 이력 확인용 기록 (F-7 검토 결과 복원엔 미사용)
+     *--------------------------------------------------------------*/
+    buf[32] = (Uint8)( p->LastCellV        & 0xFFU);           // TODO : [검증] 260831_Note1, 0.18 F-5
+    buf[33] = (Uint8)((p->LastCellV >> 8)  & 0xFFU);
+    buf[34] = (Uint8)((Uint16) p->LastAh        & 0xFFU);      // TODO : [검증] 260831_Note1, 0.18 F-7
+    buf[35] = (Uint8)(((Uint16)p->LastAh >> 8)  & 0xFFU);
+
     /* CRC 미사용 → 0 */
     p->MetaCRC = 0U;
 
     /* Write Enable */
     (void)NVR_SPIWrite(NVR_WREN_CMD, NVR_NO_ADDR, (Uint8*)0, 0U);
     /* A영역 저장 */
-    (void)NVR_SPIWrite(NVR_WRITE_CMD, NVR_META_ADDR, (Uint8*)buf,(Uint16)32U);
+    /*--------------------------------------------------------------
+     * 260831 : 직렬화 길이 32 → NVR_META_BYTES(36).
+     *--------------------------------------------------------------*/
+    //(void)NVR_SPIWrite(NVR_WRITE_CMD, NVR_META_ADDR, (Uint8*)buf,(Uint16)32U);
+    (void)NVR_SPIWrite(NVR_WRITE_CMD, NVR_META_ADDR, (Uint8*)buf,(Uint16)NVR_META_BYTES);   // TODO : [검증] 260831_Note1, 0.18
 }
 void NVRAM_AZoneReadHandler(NVRZoneAReg *p)
 {
     // Uint16 OK;
-    static Uint8 buf[32];
+    static Uint8 buf[NVR_META_BYTES];   // TODO : [검증] 260831_Note1, 0.18 32 → 36 byte
     static Uint16 idx = 0U;
     if (p == (NVRZoneAReg *)0)
     {
      //   return ;
     }
     //  1. 영역 A 메타데이터 읽기
-    NVR_SPIRead(NVR_READ_CMD,NVR_META_ADDR,(Uint8*)buf,(Uint16)32U);
+    /*--------------------------------------------------------------
+     * 260831 : 읽기 길이 32 → NVR_META_BYTES(36).
+     *--------------------------------------------------------------*/
+    //NVR_SPIRead(NVR_READ_CMD,NVR_META_ADDR,(Uint8*)buf,(Uint16)32U);
+    NVR_SPIRead(NVR_READ_CMD,NVR_META_ADDR,(Uint8*)buf,(Uint16)NVR_META_BYTES);   // TODO : [검증] 260831_Note1, 0.18
     //  2. 최초 인지 판단
     /* MetaVersion */
     p->MetaVersion =(Uint16)buf[0] |((Uint16)buf[1] << 8);
@@ -241,10 +295,27 @@ void NVRAM_AZoneReadHandler(NVRZoneAReg *p)
         ((Uint32)buf[30] << 16)  |
         ((Uint32)buf[31] << 24);
 
+    /* LastCellV / LastAh */
+    p->LastCellV = (Uint16)buf[32] | ((Uint16)buf[33] << 8);              // TODO : [검증] 260831_Note1, 0.18 F-5
+    p->LastAh    = (int16)((Uint16)buf[34] | ((Uint16)buf[35] << 8));     // TODO : [검증] 260831_Note1, 0.18 F-7
+
     /* 디버그용 확인 */
     if(idx != 32U)
     {
         /* 오류 처리 or assert */
+    }
+
+    /*--------------------------------------------------------------
+     * 260831 : 읽기 유효성 검사 복구(F-2). 기존 주석 블록은 복구값을
+     *          LastSOC=300(30%) 으로 채워 '가짜 유효값' 이 되므로 쓰지 않고,
+     *          무효 마커(-1) 로만 표시해 상위(main.c)가 OCV 로 폴백하게 한다.
+     *--------------------------------------------------------------*/
+    if (p->MetaVersion != (Uint16)Product_Version)
+    {
+        p->LastSOC   = (int16)-1;                                        // TODO : [검증] 260831_Note1, 0.18 F-2 무효 마커
+        p->MetaCRC   = 0u;
+        p->LastCellV = 0u;                                               // TODO : [검증] 260831_Note1, 0.18 전압 비교도 무효화
+        p->LastAh    = (int16)0;
     }
 
 /*
@@ -391,11 +462,22 @@ void NVR_Init(void)
 void NVR_UnLock(void)
 {
     Uint8 buf[10];
+    Uint8 sr = 0U;
     // Enable write
     NVR_SPIWrite(NVR_WREN_CMD, 0xffffffff, NULL, 0);
     // Set status register - Un-protect all range
     buf[0] = 0x02;
     NVR_SPIWrite(NVR_WRSR_CMD, 0Xffffffff, buf, 1);
+
+    /*--------------------------------------------------------------
+     * 260831 : 해제 결과를 읽어 남긴다(F-1). 원인 판별용 진단값이며
+     *          동작을 바꾸지는 않는다.
+     *            0xFF           : 칩 무응답 (미실장·CS·전원)
+     *            0x00           : MISO Low 고정 (배선)
+     *            (sr & 0x0C)!=0 : BP 잔존 → 쓰기보호 해제 실패
+     *--------------------------------------------------------------*/
+    NVR_SPIRead(NVR_RDSR_CMD, NVR_NO_ADDR, &sr, 1);
+    NVRAllRegs.SRStatus = (Uint16)sr;                    // TODO : [검증] 260831_Note1, 0.18 F-1 해제 확인
 }
 
 void NVR_Lock(void)
@@ -451,6 +533,13 @@ Uint8 NVR_SPIWrite(Uint8 cmd, Uint32 addr, Uint8* buf, Uint16 len)
     NVR_CE_H;
     delay_us(1);
 
+    /*--------------------------------------------------------------
+     * 260831 : NVRAM 접근용 SPIBRR(50) 을 쓰고 나서 되돌리지 않아
+     *          이후 LTC6804 통신이 잘못된 속도로 돌던 문제 수정.
+     *          복원값은 InitSpi() 설정값 119 (BAT_LTC6802.c:72).
+     *--------------------------------------------------------------*/
+    //[원복] 260831 SPIBRR=119 복원 제거 (세션 되돌리기 E)
+    //SpiaRegs.SPIBRR = 119;
     SPI_Sema = 0U;
     return 1U;
 }
@@ -493,6 +582,8 @@ Uint8 NVR_SPIRead(Uint8 cmd, Uint32 addr, Uint8* buf, Uint16 len)
     NVR_CE_H;
     delay_us(1);
 
+    //[원복] 260831 SPIBRR=119 복원 제거 (세션 되돌리기 E)
+    //SpiaRegs.SPIBRR = 119;
     SPI_Sema = 0;
     return 1;
 }

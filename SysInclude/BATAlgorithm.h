@@ -82,6 +82,29 @@ Note: In this software, the default inverter is supposed to be DMC1500 board.
 #define C_SocOCVLinearMinF       20.0F        // ⚠️ [셀 특성 따라 조정] 선형구간 시작 SOC
 #define C_SocOCVLinearMaxF       80.0F        // ⚠️ [셀 특성 따라 조정] 선형구간 끝 SOC
 
+/*--------------------------------------------------------------
+ * 260831 : 재기동 SOC 점프 대책(F-5) — 차단 직전 셀전압과 부팅 시 셀전압이
+ *          거의 같으면 휴지 중 상태 변화가 없었다고 보고 NVR 값을 이어받는다.
+ *          휴지시간을 재지 않으므로 RTC 등 추가 HW 가 필요 없다.
+ *--------------------------------------------------------------*/
+#define C_SocRestCellVoltDiffmV   5.0F        /* [mV] 이 이하면 NVR 우선 채택 */         // TODO : [검증] 260831_Note1, 0.18 F-5
+
+/*--------------------------------------------------------------
+ * 260831 : 운전 중 OCV 완만 보정(F-6) 진입 조건과 보정 속도.
+ *          Relaxation 미수렴 전압으로 초기화된 오차를 무부하 구간에서
+ *          천천히 되돌린다. 아래 조건을 모두 만족할 때만 동작한다.
+ *--------------------------------------------------------------*/
+#define C_SocOcvAdjRestCount      36000UL     /* 무부하 1800s = 50ms x 36000 */          // TODO : [검증] 260831_Note1, 0.18 F-6
+#define C_SocOcvAdjVoltWinCount   2400UL      /* 전압 수렴 판정창 120s = 50ms x 2400 */  // TODO : [검증] 260831_Note1, 0.18 F-6
+#define C_SocOcvAdjVoltSettlemV   2.0F        /* [mV] 120s 변화량 임계 */                // TODO : [검증] 260831_Note1, 0.18 F-6
+#define C_SocOcvAdjCellDivF       0.05F       /* [V] 셀 편차 상한 50mV */                // TODO : [검증] 260831_Note1, 0.18 F-6
+#define C_SocOcvAdjTempMinF       10.0F       /* [degC] OCV 표 신뢰 하한 */              // TODO : [검증] 260831_Note1, 0.18 F-6
+#define C_SocOcvAdjTempMaxF       40.0F       /* [degC] OCV 표 신뢰 상한 */              // TODO : [검증] 260831_Note1, 0.18 F-6
+#define C_SocOcvAdjDeadBandF      1.0F        /* [%p] 이 이내면 보정 안 함 */            // TODO : [검증] 260831_Note1, 0.18 F-6
+#define C_SocOcvAdjStopBandF      0.5F        /* [%p] 히스테리시스 정지 */               // TODO : [검증] 260831_Note1, 0.18 F-6
+#define C_SocOcvAdjRateF          0.0005F     /* [%p/50ms] = 0.01 %p/s */                // TODO : [검증] 260831_Note1, 0.18 F-6
+#define C_SocOcvAdjMaxPerRestF    5.0F        /* [%p] 1회 무부하 인터벌 상한 */          // TODO : [검증] 260831_Note1, 0.18 F-6
+
 /*========================================
  * OCV-SOC Lookup Table (정밀도 ±0.5%)
  *========================================*/
@@ -245,6 +268,26 @@ typedef struct
   float32  SOCbufF;
   float32  SysSocInitF;
   float32  CellAgvVoltageF;
+
+  /*--------------------------------------------------------------
+   * 260831 : 재기동 SOC 점프 대책(F-5) 및 운전 중 완만 보정(F-6) 입력·상태.
+   *          온도·셀편차·시스템 상태는 main 루프에서 매 주기 채워 넣는다.
+   *--------------------------------------------------------------*/
+  float32  RestVoltDiffF;      /* [mV] 부팅 시 셀 평균전압 - NVR LastCellV */   // TODO : [검증] 260831_Note1, 0.18 F-5
+  Uint16   NvrAdopted;         /* 1 = 부팅 SOC 로 NVR 값을 채택 */              // TODO : [검증] 260831_Note1, 0.18 F-5
+
+  float32  CellTempF;          /* [degC] 셀 평균온도 */                          // TODO : [검증] 260831_Note1, 0.18 F-6 입력
+  float32  CellDivVoltF;       /* [V] 셀 전압 편차 */                            // TODO : [검증] 260831_Note1, 0.18 F-6 입력
+  Uint16   SysStateNo;         /* System_STATE_* 값 */                           // TODO : [검증] 260831_Note1, 0.18 F-6 입력
+
+  Uint32   RestTimeCount;      /* 무부하 지속 50ms 카운트 */                     // TODO : [검증] 260831_Note1, 0.18 F-6
+  Uint32   VoltChkCount;       /* 전압 수렴 판정 창(120s) 카운트 */              // TODO : [검증] 260831_Note1, 0.18 F-6
+  float32  VoltRefF;           /* [V] 120s 전 셀 평균전압 */                     // TODO : [검증] 260831_Note1, 0.18 F-6
+  float32  VoltSettleF;        /* [mV] 120s 간 전압 변화량 */                    // TODO : [검증] 260831_Note1, 0.18 F-6
+  float32  OcvAdjErrF;         /* [%p] OCV 대비 SOC 오차 */                      // TODO : [검증] 260831_Note1, 0.18 F-6
+  float32  OcvAdjUsedF;        /* [%p] 이번 무부하 인터벌 누적 보정량 */          // TODO : [검증] 260831_Note1, 0.18 F-6
+  Uint16   OcvAdjActive;       /* 1 = 완만 보정 진행 중 */                       // TODO : [검증] 260831_Note1, 0.18 F-6
+  Uint16   OcvAdjLimitFlag;    /* 1 = 1회 보정 한계(5%p) 도달로 중단 */          // TODO : [검증] 260831_Note1, 0.18 F-6
 
 
 

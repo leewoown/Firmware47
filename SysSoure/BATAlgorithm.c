@@ -321,6 +321,26 @@ void CalSocRegsInit(SocReg *P)
     P->SoCStateRegs.all = 0u;
     P->state            = SOC_STATE_IDLE;
 
+    /*--------------------------------------------------------------
+     * 260831 : F-5/F-6 용 상태 초기화. VoltSettleF 는 '아직 수렴 판정 전'
+     *          을 뜻하는 큰 값으로 두어, 판정창 120s 가 한 번 지나기 전에는
+     *          보정이 시작되지 않도록 한다.
+     *--------------------------------------------------------------*/
+    P->RestVoltDiffF  = 0.0F;                                  // TODO : [검증] 260831_Note1, 0.18 F-5
+    P->NvrAdopted     = 0u;
+
+    P->CellTempF      = 25.0F;                                 // TODO : [검증] 260831_Note1, 0.18 F-6
+    P->CellDivVoltF   = 0.0F;
+    P->SysStateNo     = 0u;
+
+    P->RestTimeCount  = 0u;                                    // TODO : [검증] 260831_Note1, 0.18 F-6
+    P->VoltChkCount   = 0u;
+    P->VoltRefF       = 0.0F;
+    P->VoltSettleF    = 1000.0F;                               /* 수렴 미판정 */
+    P->OcvAdjErrF     = 0.0F;
+    P->OcvAdjUsedF    = 0.0F;
+    P->OcvAdjActive   = 0u;
+    P->OcvAdjLimitFlag= 0u;
 }
 void CalSocHandle(SocReg *P)
 {
@@ -381,7 +401,88 @@ void CalSocHandle(SocReg *P)
     {
         P->SysSOCF = 0.0F;
     }
-    /* 계산 방식: 항상 Coulomb Counting (운용 중 OCV 재보정 미사용) */
-    P->SoCStateRegs.bit.CalMeth = 1u;
+    /*--------------------------------------------------------------
+     * 260831 : 운전 중 OCV 완만 보정 추가(F-6).
+     *          기존에는 부팅 시 한 번 정한 SysSocInitF 를 끝까지 쓰기 때문에
+     *          초기 오차가 영구히 남았다. 충분히 오래 쉬고 전압이 수렴한
+     *          구간에서만 OCV 로 기준값을 아주 천천히 끌어당긴다.
+     *          - 진입 조건(전부 AND) : 무부하 1800s, 120s 전압변화 2mV 이내,
+     *            셀편차 50mV 미만, 온도 10~40도, READY 상태
+     *            (READY = 상위 RUNStatus 0 → 컨택터 개방된 대기 상태.
+     *             STANDBY 는 부팅 중 한 번 지나갈 뿐이라 조건에서 제외)
+     *          - 보정 속도 0.01 %p/s, 데드밴드 1.0 %p, 정지밴드 0.5 %p
+     *          - 1회 무부하 인터벌당 최대 5.0 %p 까지만 (OCV 오판 피해 한정)
+     *          SysSocInitF 만 움직이므로 적산분(SysAhF)은 건드리지 않는다.
+     *--------------------------------------------------------------*/
+    //P->SoCStateRegs.bit.CalMeth = 1u;
+#if FarasisP56Ah   /* OCV 표(OCVtoSOC_P56Ah)가 있는 셀에서만 동작 */
+    if((P->SysSoCCTAbsF < C_SocCurrentDeadbandF) &&
+       (P->SysStateNo == (Uint16)System_STATE_READY))   // TODO : [검증] 260831_Note1, 0.18 STANDBY 제외(부팅 중 1회 통과)
+    {
+        if(P->RestTimeCount < C_SocOcvAdjRestCount) { P->RestTimeCount++; }      // TODO : [검증] 260831_Note1, 0.18 무부하 지속시간
+        P->VoltChkCount++;
+        if(P->VoltChkCount >= C_SocOcvAdjVoltWinCount)
+        {
+            P->VoltSettleF = fabs((P->CellAgvVoltageF - P->VoltRefF) * 1000.0F); // TODO : [검증] 260831_Note1, 0.18 120s 전압 변화량[mV]
+            P->VoltRefF    = P->CellAgvVoltageF;
+            P->VoltChkCount = 0u;
+        }
+    }
+    else
+    {
+        /* 부하가 걸리면 무부하 판정과 1회 보정량을 모두 초기화 */
+        P->RestTimeCount   = 0u;                                                // TODO : [검증] 260831_Note1, 0.18 무부하 해제
+        P->VoltChkCount    = 0u;
+        P->VoltRefF        = P->CellAgvVoltageF;
+        P->VoltSettleF     = 1000.0F;                                           /* 수렴 미판정 상태 */
+        P->OcvAdjUsedF     = 0.0F;
+        P->OcvAdjActive    = 0u;
+        P->OcvAdjLimitFlag = 0u;
+    }
+
+    if((P->RestTimeCount  >= C_SocOcvAdjRestCount) &&
+       (P->VoltSettleF    <= C_SocOcvAdjVoltSettlemV) &&
+       (P->CellDivVoltF   <  C_SocOcvAdjCellDivF) &&
+       (P->CellTempF      >= C_SocOcvAdjTempMinF) &&
+       (P->CellTempF      <= C_SocOcvAdjTempMaxF) &&
+       (P->OcvAdjLimitFlag == 0u))
+    {
+        P->OcvAdjErrF = OCVtoSOC_P56Ah(P->CellAgvVoltageF) - P->SysSOCF;         // TODO : [검증] 260831_Note1, 0.18 OCV 대비 오차[%p]
+
+        if(P->OcvAdjActive == 0u)
+        {
+            if(fabs(P->OcvAdjErrF) > C_SocOcvAdjDeadBandF) { P->OcvAdjActive = 1u; }   /* 데드밴드 밖 → 보정 시작 */
+        }
+        else
+        {
+            if(fabs(P->OcvAdjErrF) <= C_SocOcvAdjStopBandF) { P->OcvAdjActive = 0u; }  /* 정지밴드 안 → 보정 종료 */
+        }
+
+        if(P->OcvAdjActive == 1u)
+        {
+            if(P->OcvAdjErrF > 0.0F) { P->SysSocInitF += C_SocOcvAdjRateF; }     // TODO : [검증] 260831_Note1, 0.18 0.01%p/s 램프
+            else                     { P->SysSocInitF -= C_SocOcvAdjRateF; }
+
+            P->OcvAdjUsedF += C_SocOcvAdjRateF;
+            if(P->OcvAdjUsedF >= C_SocOcvAdjMaxPerRestF)
+            {
+                P->OcvAdjLimitFlag = 1u;                                         // TODO : [검증] 260831_Note1, 0.18 1회 5%p 한계 도달
+                P->OcvAdjActive    = 0u;
+            }
+            P->SoCStateRegs.bit.CalMeth = 0u;                                    /* 보정 중에는 OCV 보정 표시 */
+        }
+        else
+        {
+            P->SoCStateRegs.bit.CalMeth = 1u;
+        }
+    }
+    else
+    {
+        P->OcvAdjActive = 0u;
+        P->SoCStateRegs.bit.CalMeth = 1u;                                        /* 그 외에는 Coulomb Counting */
+    }
+#else
+    P->SoCStateRegs.bit.CalMeth = 1u;                                            /* OCV 표 없는 셀 : 기존 동작 유지 */
+#endif
 }
 

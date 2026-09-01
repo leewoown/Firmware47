@@ -200,7 +200,6 @@ int LTC6804_read_cmd(char address, short command, char data[], int len)
     int valid = 0;
     int ret;
 
-
     LTC6804_WakeUp();
     BATSPIEnable_low();
     ret = LTC6804_write(address, command, 0, 0);
