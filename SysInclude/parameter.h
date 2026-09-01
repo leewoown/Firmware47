@@ -288,7 +288,6 @@ Parameter
  */
 
 
-
 #define     Product_SysCellVauleS              22
 #define     Product_SysCellVauleP              1
 //#define     Product_Voltage                    768  // 3.664*22
@@ -298,7 +297,8 @@ Parameter
 #define     Product_Type                       0    // TODOS 26.07.02 TEST 버전0, 양상버전 1
 //#define     Product_Version                    18   // 이전값(원복 전)
 //#define     Product_Version                    16   // TODO : [변경] 260901_Note1, 0.16 Product_Version 18->16 (VER 0.16)
-#define     Product_Version                      17   // TODO : [변경] 260901_Note1, 0.17 Product_Version 16->17 (VER 0.17, R12 반영)
+//#define     Product_Version                    17   // TODO : [변경] 260901_Note1, 0.17 Product_Version 16->17 (VER 0.17, R12 반영)
+#define     Product_Version                      18   // TODO : [변경] 260901_Note1, 0.18 Product_Version 17->18 (BATIC SPI 설정 기입 추가)
 /*--------------------------------------------------------------
  * 260831 : 디버깅보드 시험모드 해제 — 모사장치 CAN 대신 실기 isoSPI 사용.
  *          셀 전압/온도를 LTC6804 에서 직접 취득하며,

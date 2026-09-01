@@ -102,6 +102,16 @@ unsigned int SPI_BATRead(void)
 void BATSPIEnable_low(void)
 {
 //  delay_us(50);
+    /*--------------------------------------------------------------
+     * 260901 : SPI-A 버스를 BATIC / NVRAM / (향후)MCP2515 가 공유.
+     *          NVRAM 접근 시 SPIBRR=50 으로 바뀐 뒤 복원되지 않아
+     *          BATIC 이 다른 속도로 통신하던 문제 대응.
+     *          CS Low 직전에 BATIC 설정을 직접 기입한다.
+     *          SPICLK = LSPCLK(20MHz) / (SPIBRR+1), 60 = 328kHz
+     *--------------------------------------------------------------*/
+    SpiaRegs.SPICCR.bit.CLKPOLARITY = 1;        // TODO : [검증] 260901_Note1, 0.18 BATIC 극성 (Falling edge output)
+    SpiaRegs.SPIBRR                 = 60;       // TODO : [검증] 260901_Note1, 0.18 BATIC 속도 328kHz (현재 동작 확인된 값)
+
     GpioDataRegs.GPACLEAR.bit.GPIO10 = 1;
 //  delay_us(50);
 }

@@ -508,8 +508,16 @@ Uint8 NVR_SPIWrite(Uint8 cmd, Uint32 addr, Uint8* buf, Uint16 len)
         return 0U;
     }
     // Set configuration
-    SpiaRegs.SPICCR.bit.CLKPOLARITY = 1;        // Rising edge output
-    SpiaRegs.SPIBRR                 = 50;       // Baud rate
+    /*--------------------------------------------------------------
+     * 260901 : SPI-A 버스 공유 대응. NVRAM 설정을 CS Low 직전에
+     *          기입하는 방식은 그대로 두고, BATIC 쪽에도 동일하게
+     *          설정 기입을 추가하여 속도 오염을 막는다.
+     *          (BAT_LTC6802.c : BATSPIEnable_low)
+     *          주석 오기 정정 : CLKPOLARITY=1 은 Falling edge output
+     *--------------------------------------------------------------*/
+    //SpiaRegs.SPICCR.bit.CLKPOLARITY = 1;        // Rising edge output
+    SpiaRegs.SPICCR.bit.CLKPOLARITY = 1;        // TODO : [검증] 260901_Note1, 0.18 NVRAM 극성 (Falling edge output)
+    SpiaRegs.SPIBRR                 = 50;       // TODO : [검증] 260901_Note1, 0.18 NVRAM 속도 392kHz (기존값 유지)
 
     NVR_CE_L;
     delay_us(1);
@@ -557,8 +565,12 @@ Uint8 NVR_SPIRead(Uint8 cmd, Uint32 addr, Uint8* buf, Uint16 len)
         return 0U;
     }
     // Set configuration
-    SpiaRegs.SPICCR.bit.CLKPOLARITY = 1;        // Rising edge output
-    SpiaRegs.SPIBRR                 = 50;       // Baud rate
+    /*--------------------------------------------------------------
+     * 260901 : SPI-A 버스 공유 대응. NVR_SPIWrite() 와 동일 사유.
+     *--------------------------------------------------------------*/
+    //SpiaRegs.SPICCR.bit.CLKPOLARITY = 1;        // Rising edge output
+    SpiaRegs.SPICCR.bit.CLKPOLARITY = 1;        // TODO : [검증] 260901_Note1, 0.18 NVRAM 극성 (Falling edge output)
+    SpiaRegs.SPIBRR                 = 50;       // TODO : [검증] 260901_Note1, 0.18 NVRAM 속도 392kHz (기존값 유지)
 
     NVR_CE_L;
     delay_us(1);
