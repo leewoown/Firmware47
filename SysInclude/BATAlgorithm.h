@@ -94,7 +94,17 @@ Note: In this software, the default inverter is supposed to be DMC1500 board.
  *          Relaxation 미수렴 전압으로 초기화된 오차를 무부하 구간에서
  *          천천히 되돌린다. 아래 조건을 모두 만족할 때만 동작한다.
  *--------------------------------------------------------------*/
-#define C_SocOcvAdjRestCount      36000UL     /* 무부하 1800s = 50ms x 36000 */          // TODO : [검증] 260831_Note1, 0.18 F-6
+/*--------------------------------------------------------------
+ * 260902 : R-7 무부하 지속 조건 1800s -> 600s 완화.
+ *          무부하 경과 시간은 대리 지표일 뿐이고, 전압이 실제로
+ *          수렴했는지는 아래 VoltSettle(120s 변화량 2mV) 조건이
+ *          직접 판정한다. 1800s 는 그 위에 덧건 중복 게이트라
+ *          가벼운 부하 이력에서 보정 기회를 놓치게 했다.
+ *          안전판인 2mV 조건과 1회 5%p 상한(MaxPerRest)은 유지.
+ *          근거 : SOC_FailR3.md R-7
+ *--------------------------------------------------------------*/
+//#define C_SocOcvAdjRestCount      36000UL     /* 무부하 1800s = 50ms x 36000 */          // TODO : [검증] 260831_Note1, 0.18 F-6
+#define C_SocOcvAdjRestCount      12000UL     /* 무부하 600s = 50ms x 12000 */           // TODO : [검증] 260902_Note1, 0.21 R-7 중복 게이트 완화
 #define C_SocOcvAdjVoltWinCount   2400UL      /* 전압 수렴 판정창 120s = 50ms x 2400 */  // TODO : [검증] 260831_Note1, 0.18 F-6
 #define C_SocOcvAdjVoltSettlemV   2.0F        /* [mV] 120s 변화량 임계 */                // TODO : [검증] 260831_Note1, 0.18 F-6
 #define C_SocOcvAdjCellDivF       0.05F       /* [V] 셀 편차 상한 50mV */                // TODO : [검증] 260831_Note1, 0.18 F-6
@@ -273,6 +283,7 @@ typedef struct
    * 260831 : 재기동 SOC 점프 대책(F-5) 및 운전 중 완만 보정(F-6) 입력·상태.
    *          온도·셀편차·시스템 상태는 main 루프에서 매 주기 채워 넣는다.
    *--------------------------------------------------------------*/
+  float32  NvrCellVoltF;       /* [mV] NVR 이 기억한 차단 직전 셀 평균전압 */   // TODO : [검증] 260902_Note1, 0.21 F-5 입력(호출자가 채움)
   float32  RestVoltDiffF;      /* [mV] 부팅 시 셀 평균전압 - NVR LastCellV */   // TODO : [검증] 260831_Note1, 0.18 F-5
   Uint16   NvrAdopted;         /* 1 = 부팅 SOC 로 NVR 값을 채택 */              // TODO : [검증] 260831_Note1, 0.18 F-5
 

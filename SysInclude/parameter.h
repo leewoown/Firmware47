@@ -134,6 +134,23 @@ Note: In this software, the default inverter is supposed to be DMC1500 board.
 #define RTC_CS            GpioDataRegs.GPACLEAR.bit.GPIO9=1
 #define RTC_DS            GpioDataRegs.GPASET.bit.GPIO9=1
 #define RTC_MF            GpioDataRegs.GPCDAT.bit.GPIO8
+/*--------------------------------------------------------------
+ * 260910 : SPI 대기 루프 타임아웃 상한. 타임아웃이 없던 탓에
+ *          부팅 중 NVRAM 접근에서 멈추면 main 의 while(1) 진입이
+ *          안 되어 BATIC(LTC6804) 통신이 시작조차 못 했다.
+ *          8bit @328kHz = 약 24us 인데 60000 회는 약 4~7ms 로
+ *          정상 전송에는 걸리지 않는 여유값이다. (Uint16 상한 내)
+ *--------------------------------------------------------------*/
+#define C_SpiWaitTimeout                   60000U   // TODO : [검증] 260910_Note1, 0.21 SPI 대기 루프 타임아웃 상한
+
+/*--------------------------------------------------------------
+ * 260910 : 진단 카운터 상한. 규약 R14 에서 0x608 의 카운터가
+ *          8bit(0~200) 로 재편되어, 송신값이 255 를 넘지 않도록
+ *          200 에서 포화시킨다(리셋 아님 — 이상 이력을 유지).
+ *--------------------------------------------------------------*/
+#define C_SpiTimeoutMax                      200U   // TODO : [검증] 260910_Note1, 0.21 SpiTimeoutCount 포화 상한 (8bit CAN 송신)
+#define C_IsoSpiErrLimit                     200    // TODO : [검증] 260910_Note1, 0.21 PackISO_ERR 판정 임계 (ltc_error_count 연속 실패)
+
 /*
  * SPI chip NVRAM CS
  */
@@ -288,26 +305,35 @@ Parameter
  */
 
 
-#define     Product_SysCellVauleS              22
-#define     Product_SysCellVauleP              1
+#define     Product_SysCellVauleS                22
+#define     Product_SysCellVauleP                1
 //#define     Product_Voltage                    768  // 3.664*22
 //#define     Product_Capacity                   450  //
-#define     Product_Voltage                    809  // TODO : [튜닝] 260809_Note1, 0.16 R11 Normal_Volt 80.96V(22S×3.68≈809)
-#define     Product_Capacity                   564  // TODO : [튜닝] 260809_Note1, 0.16 R11 Capacity 56.4Ah(564)
-#define     Product_Type                       0    // TODOS 26.07.02 TEST 버전0, 양상버전 1
+#define     Product_Voltage                      809   // TODO : [튜닝] 260809_Note1, 0.16 R11 Normal_Volt 80.96V(22S×3.68≈809)
+#define     Product_Capacity                     564   // TODO : [튜닝] 260809_Note1, 0.16 R11 Capacity 56.4Ah(564)
+#define     Product_Type                         0     // TODOS 26.07.02 TEST 버전0, 양상버전 1
 //#define     Product_Version                    18   // 이전값(원복 전)
 //#define     Product_Version                    16   // TODO : [변경] 260901_Note1, 0.16 Product_Version 18->16 (VER 0.16)
 //#define     Product_Version                    17   // TODO : [변경] 260901_Note1, 0.17 Product_Version 16->17 (VER 0.17, R12 반영)
 //#define     Product_Version                    18   // TODO : [변경] 260901_Note1, 0.18 Product_Version 17->18 (BATIC SPI 설정 기입 추가)
 //#define     Product_Version                    19   // TODO : [변경] 260901_Note1, 0.19 Product_Version 18->19 (보호설정표 R9 반영)
-#define     Product_Version                      20   // TODO : [변경] 260902_Note1, 0.20 Product_Version 19->20 (P56 전류제한 BATAlgorithm 이관·SocReg 입출력화)
+//#define     Product_Version                    20   // (0.20 커밋 완료분: 7be1092)
+//#define     Product_Version                    21   // (0.21 baseline — BATIC SPI 통신 불능 발생, V0.22 에서 복구)
+#define     Product_Version                      22   // TODO : [변경] 260910_Note1, 0.22 Product_Version 21->22 (BATIC SPI 복구 + isoSPI 판정 + SOC 결함 수정)
 /*--------------------------------------------------------------
  * 260831 : 디버깅보드 시험모드 해제 — 모사장치 CAN 대신 실기 isoSPI 사용.
  *          셀 전압/온도를 LTC6804 에서 직접 취득하며,
  *          BAT IC 통신 진단(PEC 에러 카운터)도 이때부터 동작한다.
  *--------------------------------------------------------------*/
+/*--------------------------------------------------------------
+ * 260910 : LTC6804 실기 통신 불능 — DebugBoardMode 가 1(모사장치 CAN)로
+ *          남아 있어 SlaveVoltagHandler() 가 컴파일에서 제외되고
+ *          CAN 메일박스도 모사장치 ID(0x401~) 로 잡혀 있었다.
+ *          값(1)과 우측 주석("실기 isoSPI")이 불일치 상태였음.
+ *--------------------------------------------------------------*/
 //#define     DebugBoardMode                     1    // TODOS 260726_Note1, 0.14 디버깅보드 시험모드 (0:실기 isoSPI, 1이상:모사장치 CAN, 양산빌드 반드시 0)
-#define     DebugBoardMode                       0    // TODO : [검증] 260831_Note1, 0.18 실기 isoSPI 모드
+//#define     DebugBoardMode                     1    // TODO : [검증] 260831_Note1, 0.18 (값 오기 — 주석은 isoSPI 인데 값이 1)
+#define     DebugBoardMode                       0    // TODO : [검증] 260910_Note1, 0.21 실기 isoSPI 모드 복귀 (LTC6804 직접 취득)
 
 #if (DebugBoardMode != 0) && (Product_Type == 1)
 #error "DebugBoardMode must be 0 when Product_Type=1 (production build)"

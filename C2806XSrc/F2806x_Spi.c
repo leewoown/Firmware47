@@ -167,15 +167,61 @@ void InitSpiaGpio()
 
     EDIS;
 }
+/*--------------------------------------------------------------
+ * 260910 : SPI 대기 루프에 타임아웃 추가.
+ *          기존에는 타임아웃이 없어, 부팅 중 NVR_Init()/
+ *          NVRAM_SelfTest() 가 이 함수를 부르다 멈추면 main 의
+ *          while(1) 진입 자체가 안 되어 BATIC(LTC6804) 통신이
+ *          시작조차 못 했다. 이제 SPI 이상은 정지가 아니라
+ *          카운터로 관측되는 실패가 된다.
+ *          진단 : SpiTimeoutCount (0 이면 정상)
+ *--------------------------------------------------------------*/
+volatile Uint16 SpiTimeoutCount = 0;        // TODO : [검증] 260910_Note1, 0.21 SPI 타임아웃 발생 횟수 (0 정상)
+
 void SPI_Write(unsigned int WRData)
 {
     unsigned int Dummy;
     unsigned int Tmp;
+    Uint16 to;                              // TODO : [검증] 260910_Note1, 0.21 무한대기 방지 카운터
     SpiaRegs.SPICCR.bit.SPICHAR = 0x07;
     Dummy = (WRData<<8)&0xFF00;
-    while(SpiaRegs.SPISTS.bit.BUFFULL_FLAG);
+    //while(SpiaRegs.SPISTS.bit.BUFFULL_FLAG);
+    to = 0;                                                                     // TODO : [검증] 260910_Note1, 0.21
+    while(SpiaRegs.SPISTS.bit.BUFFULL_FLAG)
+    {
+        if(++to > C_SpiWaitTimeout)
+        {
+            if(SpiTimeoutCount < C_SpiTimeoutMax) { SpiTimeoutCount++; }
+            /*--------------------------------------------------------------
+             * 260910 : 타임아웃 시 SPI 를 SW reset 으로 복구한다.
+             *          카운터만 올리고 빠져나오면 SPITXBUF 에 데이터가
+             *          남은 채 시프트 레지스터·플래그가 어긋나, 이후
+             *          BATIC 전송이 계속 깨진다.
+             *--------------------------------------------------------------*/
+            SpiaRegs.SPICCR.bit.SPISWRESET = 0;     // TODO : [검증] 260910_Note1, 0.21 SPI 상태 복구
+            SpiaRegs.SPICCR.bit.SPISWRESET = 1;     // TODO : [검증] 260910_Note1, 0.21 SPI 상태 복구
+            return;
+        }              // TODO : [검증] 260910_Note1, 0.21 버퍼 비움 대기 타임아웃
+    }
     SpiaRegs.SPITXBUF = Dummy;              // Send
-    while(SpiaRegs.SPISTS.bit.INT_FLAG!=1); // Wait for Tx   전송이 끝났거나 수신이 시작되면 1이됨.
+    //while(SpiaRegs.SPISTS.bit.INT_FLAG!=1); // Wait for Tx   전송이 끝났거나 수신이 시작되면 1이됨.
+    to = 0;                                                                     // TODO : [검증] 260910_Note1, 0.21
+    while(SpiaRegs.SPISTS.bit.INT_FLAG!=1)  // Wait for Tx   전송이 끝났거나 수신이 시작되면 1이됨.
+    {
+        if(++to > C_SpiWaitTimeout)
+        {
+            if(SpiTimeoutCount < C_SpiTimeoutMax) { SpiTimeoutCount++; }
+            /*--------------------------------------------------------------
+             * 260910 : 타임아웃 시 SPI 를 SW reset 으로 복구한다.
+             *          카운터만 올리고 빠져나오면 SPITXBUF 에 데이터가
+             *          남은 채 시프트 레지스터·플래그가 어긋나, 이후
+             *          BATIC 전송이 계속 깨진다.
+             *--------------------------------------------------------------*/
+            SpiaRegs.SPICCR.bit.SPISWRESET = 0;     // TODO : [검증] 260910_Note1, 0.21 SPI 상태 복구
+            SpiaRegs.SPICCR.bit.SPISWRESET = 1;     // TODO : [검증] 260910_Note1, 0.21 SPI 상태 복구
+            return;
+        }              // TODO : [검증] 260910_Note1, 0.21 전송완료 대기 타임아웃
+    }
     Tmp=SpiaRegs.SPIRXBUF;
     Tmp=Tmp;
 }
@@ -183,11 +229,46 @@ unsigned int SPI_Read(void)
 {
     Uint16 ReadData;
     Uint16 Dummy=0x0000;
+    Uint16 to;                              // TODO : [검증] 260910_Note1, 0.21 무한대기 방지 카운터
     SpiaRegs.SPICCR.bit.SPICHAR = 0x07;
     Dummy = (Dummy<<8)&0xFF00;
-    while(SpiaRegs.SPISTS.bit.BUFFULL_FLAG);
+    //while(SpiaRegs.SPISTS.bit.BUFFULL_FLAG);
+    to = 0;                                                                     // TODO : [검증] 260910_Note1, 0.21
+    while(SpiaRegs.SPISTS.bit.BUFFULL_FLAG)
+    {
+        if(++to > C_SpiWaitTimeout)
+        {
+            if(SpiTimeoutCount < C_SpiTimeoutMax) { SpiTimeoutCount++; }
+            /*--------------------------------------------------------------
+             * 260910 : 타임아웃 시 SPI 를 SW reset 으로 복구한다.
+             *          카운터만 올리고 빠져나오면 SPITXBUF 에 데이터가
+             *          남은 채 시프트 레지스터·플래그가 어긋나, 이후
+             *          BATIC 전송이 계속 깨진다.
+             *--------------------------------------------------------------*/
+            SpiaRegs.SPICCR.bit.SPISWRESET = 0;     // TODO : [검증] 260910_Note1, 0.21 SPI 상태 복구
+            SpiaRegs.SPICCR.bit.SPISWRESET = 1;     // TODO : [검증] 260910_Note1, 0.21 SPI 상태 복구
+            return (0);
+        }          // TODO : [검증] 260910_Note1, 0.21 버퍼 비움 대기 타임아웃
+    }
     SpiaRegs.SPITXBUF = Dummy;              // Send
-    while(SpiaRegs.SPISTS.bit.INT_FLAG!=1); // Wait for Tx전송이 끝났거나 수신이 시작되면 1이됨.
+    //while(SpiaRegs.SPISTS.bit.INT_FLAG!=1); // Wait for Tx전송이 끝났거나 수신이 시작되면 1이됨.
+    to = 0;                                                                     // TODO : [검증] 260910_Note1, 0.21
+    while(SpiaRegs.SPISTS.bit.INT_FLAG!=1)  // Wait for Tx전송이 끝났거나 수신이 시작되면 1이됨.
+    {
+        if(++to > C_SpiWaitTimeout)
+        {
+            if(SpiTimeoutCount < C_SpiTimeoutMax) { SpiTimeoutCount++; }
+            /*--------------------------------------------------------------
+             * 260910 : 타임아웃 시 SPI 를 SW reset 으로 복구한다.
+             *          카운터만 올리고 빠져나오면 SPITXBUF 에 데이터가
+             *          남은 채 시프트 레지스터·플래그가 어긋나, 이후
+             *          BATIC 전송이 계속 깨진다.
+             *--------------------------------------------------------------*/
+            SpiaRegs.SPICCR.bit.SPISWRESET = 0;     // TODO : [검증] 260910_Note1, 0.21 SPI 상태 복구
+            SpiaRegs.SPICCR.bit.SPISWRESET = 1;     // TODO : [검증] 260910_Note1, 0.21 SPI 상태 복구
+            return (0);
+        }          // TODO : [검증] 260910_Note1, 0.21 전송완료 대기 타임아웃
+    }
     delay_us(30);
     ReadData = SpiaRegs.SPIRXBUF& 0xff;
     return (ReadData);

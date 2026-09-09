@@ -184,7 +184,28 @@ void CalFarasis52AhSocInit(SocReg *P)
         *========================================*/
         P->delta = fabs(P->SOCbufF - P->NVRSocInitF);
 
-        if(P->SocInitMode == 0u)
+        /*--------------------------------------------------------------
+         * 260902 : F-5(휴지 중 전압 변화 판정)를 main.c 에서 이 함수로 이관.
+         *          기존에는 이 함수가 SysSocInitF 를 정한 뒤 main.c 가 같은
+         *          판정을 다시 해서 덮어썼고, F-5 가지는 main.c 에만 있어
+         *          두 판정이 이미 어긋나 있었다. 판정을 여기 한 곳으로 모은다.
+         *          차단 직전 셀전압(NvrCellVoltF)과 부팅 시 셀전압이 5mV
+         *          이내면 그 사이 상태 변화가 없었다고 보고 NVR 을 이어받는다.
+         *          Relaxation 미수렴 전압으로 OCV 재추정하는 것을 막는 것이
+         *          목적이며, 휴지시간 계측(RTC) 없이 전압만으로 판단한다.
+         *          NvrCellVoltF = 0 은 값이 없는 경우(구버전·무효)라 제외.
+         *--------------------------------------------------------------*/
+        P->NvrAdopted    = 0u;                                                        // TODO : [검증] 260902_Note1, 0.21 F-5 이관
+        P->RestVoltDiffF = fabs((P->CellAgvVoltageF * 1000.0F) - P->NvrCellVoltF);    // TODO : [검증] 260902_Note1, 0.21 F-5 이관
+
+        if((NVRValid == 1u) &&                                     /* NVR 유효 */
+           (P->NvrCellVoltF != 0.0F) &&                            /* 저장된 전압 있음 */
+           (P->RestVoltDiffF <= C_SocRestCellVoltDiffmV))          /* 전압 변화 없음 */
+        {
+            P->SysSocInitF = P->NVRSocInitF;                                          // TODO : [검증] 260902_Note1, 0.21 F-5 NVR 우선
+            P->NvrAdopted  = 1u;                                                      // TODO : [검증] 260902_Note1, 0.21
+        }
+        else if(P->SocInitMode == 0u)
         {
             /* 선형 */
             if((NVRValid == 0u) || (P->delta > 20.0F))
@@ -329,6 +350,7 @@ void CalSocRegsInit(SocReg *P)
      *          을 뜻하는 큰 값으로 두어, 판정창 120s 가 한 번 지나기 전에는
      *          보정이 시작되지 않도록 한다.
      *--------------------------------------------------------------*/
+    P->NvrCellVoltF   = 0.0F;                                  // TODO : [검증] 260902_Note1, 0.21 F-5 입력 초기화
     P->RestVoltDiffF  = 0.0F;                                  // TODO : [검증] 260831_Note1, 0.18 F-5
     P->NvrAdopted     = 0u;
 
@@ -418,13 +440,38 @@ void CalSocHandle(SocReg *P)
     P->SysSOCBufF2 = P->SysSOCBufF1 * 100.0F;
     P->SysSOCF     = P->SysSocInitF + P->SysSOCBufF2;
 
+    /*--------------------------------------------------------------
+     * 260902 : 적산 windup 차단.
+     *          기존에는 표시값(SysSOCF)만 0~100 으로 잘랐고 적산분
+     *          (SysAhF)은 +-45Ah 까지 계속 쌓였다. 그래서 SOC 가 한계에
+     *          닿은 뒤로는 반대 방향으로 전류가 흘러도, 넘치게 쌓인 양을
+     *          다 되돌릴 때까지 SOC 가 움직이지 않았다.
+     *          예) SysSocInitF 60% 에서 완충 후 50A 방전 시 약 32분간
+     *              SOC 가 100.0% 에 고정.
+     *          한계에 닿으면 그 한계에 대응하는 값으로 SysAhF 를 되돌려
+     *          방향이 바뀌는 즉시 SOC 가 반응하게 한다.
+     *          ※ SysAhF 는 CAN BAT80VAh 로 송신되나 검증용이라 무방.
+     *--------------------------------------------------------------*/
+    //if(P->SysSOCF > 100.0F)
+    //{
+    //    P->SysSOCF = 100.0F;
+    //}
+    //else if(P->SysSOCF < 0.0F)
+    //{
+    //    P->SysSOCF = 0.0F;
+    //}
+
     if(P->SysSOCF > 100.0F)
     {
-        P->SysSOCF = 100.0F;
+        P->SysSOCF   = 100.0F;
+        P->SysAhF    = (100.0F - P->SysSocInitF) * 0.01F * C_SocAvailableCapacityAh;   // TODO : [검증] 260902_Note1, 0.21 상한 역산
+        P->SysAhOldF = P->SysAhF;                                                      // TODO : [검증] 260902_Note1, 0.21
     }
     else if(P->SysSOCF < 0.0F)
     {
-        P->SysSOCF = 0.0F;
+        P->SysSOCF   = 0.0F;
+        P->SysAhF    = (0.0F - P->SysSocInitF) * 0.01F * C_SocAvailableCapacityAh;     // TODO : [검증] 260902_Note1, 0.21 하한 역산
+        P->SysAhOldF = P->SysAhF;                                                      // TODO : [검증] 260902_Note1, 0.21
     }
     /*--------------------------------------------------------------
      * 260831 : 운전 중 OCV 완만 보정 추가(F-6).
@@ -487,6 +534,17 @@ void CalSocHandle(SocReg *P)
         {
             if(P->OcvAdjErrF > 0.0F) { P->SysSocInitF += C_SocOcvAdjRateF; }     // TODO : [검증] 260831_Note1, 0.18 0.01%p/s 램프
             else                     { P->SysSocInitF -= C_SocOcvAdjRateF; }
+
+            /*--------------------------------------------------------------
+             * 260902 : 램프 결과에 범위 제한 추가.
+             *          기존에는 SysSocInitF 를 0.0005 %p 씩 올리고 내리기만
+             *          하고 잘라 주지 않아 0~100 밖으로 흘러갈 수 있었다.
+             *          윗단 windup 차단식이 (100 - SysSocInitF) 로 상한을
+             *          역산하므로, 범위를 벗어나면 음수 상한 같은 잘못된
+             *          값이 나온다.
+             *--------------------------------------------------------------*/
+            if(P->SysSocInitF > 100.0F)    { P->SysSocInitF = 100.0F; }          // TODO : [검증] 260902_Note1, 0.21 기준 SOC 상한
+            else if(P->SysSocInitF < 0.0F) { P->SysSocInitF = 0.0F;   }          // TODO : [검증] 260902_Note1, 0.21 기준 SOC 하한
 
             P->OcvAdjUsedF += C_SocOcvAdjRateF;
             if(P->OcvAdjUsedF >= C_SocOcvAdjMaxPerRestF)

@@ -97,6 +97,15 @@ int LTC6804_write_cmd(char address, short command, char data[], int len);
 int LTC6804_DieTemperatureRead(int pack_id, float *temperature);
 void init_PEC15_Table(void);
 unsigned short pec15(char *data, int len);
+/*--------------------------------------------------------------
+ * 260910 : SPI/BATIC 진단값 참조.
+ *          SpiTimeoutCount → 0x608 byte3 송신(R14)
+ *          ltc_error_count / ltc_state → PackISO_ERR 판정
+ *--------------------------------------------------------------*/
+extern volatile Uint16 SpiTimeoutCount;    // TODO : [검증] 260910_Note1, 0.21 SPI 대기 타임아웃 누적 (F2806x_Spi.c)
+extern int ltc_error_count;                // TODO : [검증] 260910_Note1, 0.21 LTC6804 PEC 에러 누적 (BAT_LTC6802.c)
+extern int ltc_state;                      // TODO : [검증] 260910_Note1, 0.21 LTC6804 통신 상태 1=정상 (BAT_LTC6802.c)
+
 int SlaveBMSIint(SlaveReg *s);
 int SlaveBmsBalance(SlaveReg *s);
 void SlaveVoltagHandler(SlaveReg *s);
@@ -162,6 +171,7 @@ unsigned int    LFPINITFLAG=1;
 void main(void)
 {
 //    struct ECAN_REGS ECanaShadow;
+    float32 SocSetF;                   // TODO : [검증] 260902_Note1, 0.21 CAN 수동 SOC 설정값[%] 임시
     InitSysCtrl();
     /*
      * To check the clock status of the C2000 in operation
@@ -199,19 +209,60 @@ void main(void)
     InitSpiGpio();
     InitSpi();
     /*--------------------------------------------------------------
+     * 260910 : SPI CS 초기 레벨 지정. InitGpio() 는 GPIO10/11 을
+     *          출력으로 설정만 하고 값을 주지 않아, 리셋 직후
+     *          GPADAT=0 이므로 두 CS 가 Low(활성)로 시작한다.
+     *          이 상태에서 NVR_Init()/NVRAM_SelfTest() 가 SPI 를
+     *          쓰면 BATIC(LTC6820)도 함께 선택되어 쓰레기 트래픽이
+     *          isoSPI 로 나간다. R0 는 NVRAM 전송이 없어 무증상이었다.
+     *--------------------------------------------------------------*/
+    BATDS;                          // TODO : [검증] 260910_Note1, 0.21 BATIC CS High(비활성)로 초기화
+    NVR_CE_H;                       // TODO : [검증] 260910_Note1, 0.21 NVRAM CS High(비활성)로 초기화 (parameter.h 의 NvramDS 는 GPB 오기라 사용 불가)
+
+    /*--------------------------------------------------------------
      * 260831 : NVR_Init() 호출 추가(F-1). 쓰기보호(BP) 해제 함수가
      *          정의만 되어 있고 호출처가 없어, 보호가 걸린 칩에서는
      *          WRITE 가 전부 무시되어 LastSOC 가 갱신되지 않았다.
      *          이어서 write→read 왕복 자체 진단을 1회 수행한다(F-3).
      *          결과는 NVRAllRegs.SRStatus / NvrOk 로 확인.
      *--------------------------------------------------------------*/
-    NVR_Init();                     // TODO : [검증] 260831_Note1, 0.18 F-1 쓰기보호 해제
-    NVRAM_SelfTest();               // TODO : [검증] 260831_Note1, 0.18 F-3 부팅 1회 왕복 진단
+    /*--------------------------------------------------------------
+     * 260902 : R-1 두 호출을 MemCopy/InitFlash 뒤로 이동.
+     *          NVR_Init()/NVRAM_SelfTest() 는 내부에서 NVR_SPIWrite/
+     *          NVR_SPIRead 를 부르고, 그 안에서 delay_us() 를 쓴다.
+     *          delay_us -> DSP28x_usDelay 는 .sect "ramfuncs" 라
+     *          Flash 에 저장되고 RAM 에서 실행되는 함수이며, 그 복사를
+     *          MemCopy() 가 한다. 복사 전에 부르면 아직 비어 있는 RAM
+     *          주소로 점프해 부정기 부팅 실패가 난다.
+     *          근거 : SOC_FailR3.md R-1
+     *--------------------------------------------------------------*/
+    //NVR_Init();                     // TODO : [검증] 260831_Note1, 0.18 F-1 쓰기보호 해제
+    //NVRAM_SelfTest();               // TODO : [검증] 260831_Note1, 0.18 F-3 부팅 1회 왕복 진단
     InitECanGpio();
     InitECan();
 
     MemCopy(&RamfuncsLoadStart, &RamfuncsLoadEnd, &RamfuncsRunStart);
     InitFlash();
+
+    /*--------------------------------------------------------------
+     * 260910 : BATIC SPI 통신 불능 원인 = 이 두 호출에서 부팅 중 멈춤.
+     *          내부 SPI_Write/SPI_Read 가 타임아웃 없는 무한대기라
+     *          여기서 걸리면 while(1) 진입 자체가 안 되어 LTC6804
+     *          통신이 시작조차 못 했다(ltc_error_count 0 고정).
+     *          절연시험으로 원인 확정 후, F2806x_Spi.c 의 대기 루프에
+     *          타임아웃(C_SpiWaitTimeout)을 넣고 원복한다.
+     *          NVRAM 이 응답 없어도 부팅은 진행되며, 이상 여부는
+     *          SpiTimeoutCount 로 관측한다.
+     *--------------------------------------------------------------*/
+    /*--------------------------------------------------------------
+     * 260910 : 재차 제거. 타임아웃을 넣고 원복했더니 CAN 0x608 의
+     *          BMS_SpiTimeout 이 10 으로 관측되었다 — NVRAM 이 실제로
+     *          응답하지 않아 이 두 호출이 전부 타임아웃된다는 뜻이다.
+     *          BATIC 통신 확보를 우선하여 다시 제거하고, NVRAM 무응답
+     *          원인은 별도 규명한다. (SPI 복구 로직은 F2806x_Spi.c 유지)
+     *--------------------------------------------------------------*/
+    //NVR_Init();                     // TODO : [검증] 260910_Note1, 0.21 NVRAM 무응답(SpiTimeout=10)으로 제거 — 원인 규명 후 재도입 (F-1 쓰기보호 해제)
+    //NVRAM_SelfTest();               // TODO : [검증] 260910_Note1, 0.21 NVRAM 무응답(SpiTimeout=10)으로 제거 — 원인 규명 후 재도입 (F-3 부팅 1회 왕복 진단)
 
     ConfigCpuTimer(&CpuTimer0, 80, 1000);
     //CpuTimer0Regs.PRD.all = 80000;// 90000 is 1msec
@@ -470,92 +521,105 @@ void main(void)
                  /*----------------------------------------
                   * 3. SOC 초기화 (OCV + NVR 판단)
                   *----------------------------------------*/
+                 /*--------------------------------------------------------------
+                  * 260902 : 부팅 초기화 이중화 정리.
+                  *          CellP56AhSocInit() 이 SysSocInitF 판정과 clamp,
+                  *          적산 변수 리셋(SysAhF/Old/New, SOCBufF1/2), 최종
+                  *          SysSOCF 대입까지 이미 전부 끝낸다. 그런데 아래에서
+                  *          같은 판정을 한 번 더 해서 덮어쓰고 있었다.
+                  *          F-5 가지가 이쪽에만 있어 두 판정이 이미 어긋나 있었고,
+                  *          덮어쓰는 쪽에는 clamp 도 없었다.
+                  *          F-5 를 함수 안으로 옮기고(BATAlgorithm.c), 여기서는
+                  *          입력만 채운 뒤 함수 결과를 그대로 쓴다.
+                  *          아래 4 항 판정 블록과 적산 리셋은 줄 주석으로 보존.
+                  *--------------------------------------------------------------*/
+                 Farasis56AhSocRegs.NvrCellVoltF = (float32)NVRZoneARDRegs.LastCellV;   // TODO : [검증] 260902_Note1, 0.21 F-5 입력 전달(NVR 저장 셀전압 [mV])
 
                  CellP56AhSocInit(&Farasis56AhSocRegs);
 
-                 /*----------------------------------------
-                  * 4. 시스템 SOC 반영
-                  *----------------------------------------*/
-                 Farasis56AhSocRegs.delta = fabs(Farasis56AhSocRegs.SOCbufF - Farasis56AhSocRegs.NVRSocInitF);
-                 /*--------------------------------------------------------------
-                  * 260831 : 휴지 중 전압 변화 판정 추가(F-5).
-                  *          차단 직전 셀전압(LastCellV)과 부팅 시 셀전압이 5mV 이내면
-                  *          그 사이 상태 변화가 없었다고 보고 NVR 값을 그대로 이어받는다.
-                  *          Relaxation 미수렴 전압으로 OCV 재추정하는 것을 막는 것이
-                  *          목적이며, 휴지시간 계측(RTC) 없이 전압만으로 판단한다.
-                  *          LastCellV = 0 은 값이 없는 경우(구버전·무효)라 제외.
-                  *--------------------------------------------------------------*/
-                 Farasis56AhSocRegs.NvrAdopted   = 0u;
-                 Farasis56AhSocRegs.RestVoltDiffF = fabs((Farasis56AhSocRegs.CellAgvVoltageF * 1000.0F)
-                                                        - (float32)NVRZoneARDRegs.LastCellV);   // TODO : [검증] 260831_Note1, 0.18 F-5
-                 /* OCV 값은 SOCbufF 사용 (이미 계산된 값) */
-                 if((Farasis56AhSocRegs.NVRSocInitF >= 0.0F) &&                              /* NVR 유효 */
-                    (NVRZoneARDRegs.LastCellV != 0u) &&                                      /* 저장된 전압 있음 */
-                    (Farasis56AhSocRegs.RestVoltDiffF <= C_SocRestCellVoltDiffmV))           /* 전압 변화 없음 */
-                 {
-                     Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;        // TODO : [검증] 260831_Note1, 0.18 F-5 NVR 우선
-                     Farasis56AhSocRegs.NvrAdopted  = 1u;
-                 }
-                 else if((Farasis56AhSocRegs.SOCbufF >= C_SocOCVLinearMinF) && (Farasis56AhSocRegs.SOCbufF <= C_SocOCVLinearMaxF))
-                 {
-                    //  /* TODO: 한글 주석 복구 필요(원본 인코딩 손상) */
-                    //  if(Farasis56AhSocRegs.delta > 20.0F)
-                    //  {
-                    //      /* NVR TODO: 한글 주석 복구 필요(원본 인코딩 손상) OCV TODO: 한글 주석 복구 필요(원본 인코딩 손상) */
-                    //      Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.SOCbufF;
-                    //  }
-                    //  else
-                    //  {
-                    //      /* NVR TODO: 한글 주석 복구 필요(원본 인코딩 손상) NVR TODO: 한글 주석 복구 필요(원본 인코딩 손상) */
-                    //      Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
-                    //  }
-                        /* 선형 영역 */
-                    if((Farasis56AhSocRegs.NVRSocInitF < 0.0F) ||              /* NVR 무효 */
-                       (Farasis56AhSocRegs.delta > 20.0F))                     /* NVR과 차이 큼 */
-                    {
-                        Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.SOCbufF;
-                    }
-                    else
-                    {
-                        Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
-                    }
-                 }
-                 else
-                 {
-                    /* 비선형 영역 → NVR 사용, 단 NVR 무효 또는 OCV와 큰 괴리면 OCV 강제 */
-                    // TODO(검증): stale NVR(예: 3.56V인데 NVR=100%) 방지 — delta>20% 시 OCV 폴백 추가
-                    if((Farasis56AhSocRegs.NVRSocInitF < 0.0F) ||              /* NVR 무효 */
-                       (Farasis56AhSocRegs.delta > 20.0F))                     /* NVR과 차이 큼(stale) */
-                    {
-                        /* NVR 무효 or OCV와 큰 괴리: OCV 결과 사용 (clamp된 0 또는 100) */
-                        Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.SOCbufF;
-                    }
-                    else
-                    {
-                        Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
-                    }
-                 }
-                //  else
-                //  {
-                //      /* TODO: 한글 주석 복구 필요(원본 인코딩 손상) NVR TODO: 한글 주석 복구 필요(원본 인코딩 손상) */
-                //      Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
-                //  }
-
-                 /*----------------------------------------
-                  * 초기 상태 정렬 (중요)
-                  *----------------------------------------*/
-                 /*--------------------------------------------------------------
-                  * 260831 : F-7(적산분 복원) 미반영 — 현행 0 리셋이 맞다.
-                  *          NVR 의 LastSOC 는 SysSocInitF + 적산분이 이미 더해진
-                  *          최종 SOC(Bat80VSOCF) 라서, 여기서 SysAhF 까지 되살리면
-                  *          SysSOCF = SysSocInitF + SysAhF 계산에서 적산분이
-                  *          두 번 더해진다. LastAh 는 이력 확인용으로만 저장한다.
-                  *--------------------------------------------------------------*/
-                 Farasis56AhSocRegs.SysAhF    = 0.0F;   // TODO : [검증] 260831_Note1, 0.18 F-7 검토 결과 현행 유지
-                 Farasis56AhSocRegs.SysAhOldF = 0.0F;
-                 Farasis56AhSocRegs.SysAhNewF = 0.0F;
-                 /* 최종 SOC */
-                 Farasis56AhSocRegs.SysSOCF = Farasis56AhSocRegs.SysSocInitF;
+//                 /*----------------------------------------
+//                  * 4. 시스템 SOC 반영
+//                  *----------------------------------------*/
+//                 Farasis56AhSocRegs.delta = fabs(Farasis56AhSocRegs.SOCbufF - Farasis56AhSocRegs.NVRSocInitF);
+//                 /*--------------------------------------------------------------
+//                  * 260831 : 휴지 중 전압 변화 판정 추가(F-5).
+//                  *          차단 직전 셀전압(LastCellV)과 부팅 시 셀전압이 5mV 이내면
+//                  *          그 사이 상태 변화가 없었다고 보고 NVR 값을 그대로 이어받는다.
+//                  *          Relaxation 미수렴 전압으로 OCV 재추정하는 것을 막는 것이
+//                  *          목적이며, 휴지시간 계측(RTC) 없이 전압만으로 판단한다.
+//                  *          LastCellV = 0 은 값이 없는 경우(구버전·무효)라 제외.
+//                  *--------------------------------------------------------------*/
+//                 Farasis56AhSocRegs.NvrAdopted   = 0u;
+//                 Farasis56AhSocRegs.RestVoltDiffF = fabs((Farasis56AhSocRegs.CellAgvVoltageF * 1000.0F)
+//                                                        - (float32)NVRZoneARDRegs.LastCellV);   // TODO : [검증] 260831_Note1, 0.18 F-5
+//                 /* OCV 값은 SOCbufF 사용 (이미 계산된 값) */
+//                 if((Farasis56AhSocRegs.NVRSocInitF >= 0.0F) &&                              /* NVR 유효 */
+//                    (NVRZoneARDRegs.LastCellV != 0u) &&                                      /* 저장된 전압 있음 */
+//                    (Farasis56AhSocRegs.RestVoltDiffF <= C_SocRestCellVoltDiffmV))           /* 전압 변화 없음 */
+//                 {
+//                     Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;        // TODO : [검증] 260831_Note1, 0.18 F-5 NVR 우선
+//                     Farasis56AhSocRegs.NvrAdopted  = 1u;
+//                 }
+//                 else if((Farasis56AhSocRegs.SOCbufF >= C_SocOCVLinearMinF) && (Farasis56AhSocRegs.SOCbufF <= C_SocOCVLinearMaxF))
+//                 {
+//                    //  /* TODO: 한글 주석 복구 필요(원본 인코딩 손상) */
+//                    //  if(Farasis56AhSocRegs.delta > 20.0F)
+//                    //  {
+//                    //      /* NVR TODO: 한글 주석 복구 필요(원본 인코딩 손상) OCV TODO: 한글 주석 복구 필요(원본 인코딩 손상) */
+//                    //      Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.SOCbufF;
+//                    //  }
+//                    //  else
+//                    //  {
+//                    //      /* NVR TODO: 한글 주석 복구 필요(원본 인코딩 손상) NVR TODO: 한글 주석 복구 필요(원본 인코딩 손상) */
+//                    //      Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
+//                    //  }
+//                        /* 선형 영역 */
+//                    if((Farasis56AhSocRegs.NVRSocInitF < 0.0F) ||              /* NVR 무효 */
+//                       (Farasis56AhSocRegs.delta > 20.0F))                     /* NVR과 차이 큼 */
+//                    {
+//                        Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.SOCbufF;
+//                    }
+//                    else
+//                    {
+//                        Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
+//                    }
+//                 }
+//                 else
+//                 {
+//                    /* 비선형 영역 → NVR 사용, 단 NVR 무효 또는 OCV와 큰 괴리면 OCV 강제 */
+//                    // TODO(검증): stale NVR(예: 3.56V인데 NVR=100%) 방지 — delta>20% 시 OCV 폴백 추가
+//                    if((Farasis56AhSocRegs.NVRSocInitF < 0.0F) ||              /* NVR 무효 */
+//                       (Farasis56AhSocRegs.delta > 20.0F))                     /* NVR과 차이 큼(stale) */
+//                    {
+//                        /* NVR 무효 or OCV와 큰 괴리: OCV 결과 사용 (clamp된 0 또는 100) */
+//                        Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.SOCbufF;
+//                    }
+//                    else
+//                    {
+//                        Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
+//                    }
+//                 }
+//                //  else
+//                //  {
+//                //      /* TODO: 한글 주석 복구 필요(원본 인코딩 손상) NVR TODO: 한글 주석 복구 필요(원본 인코딩 손상) */
+//                //      Farasis56AhSocRegs.SysSocInitF = Farasis56AhSocRegs.NVRSocInitF;
+//                //  }
+//
+//                 /*----------------------------------------
+//                  * 초기 상태 정렬 (중요)
+//                  *----------------------------------------*/
+//                 /*--------------------------------------------------------------
+//                  * 260831 : F-7(적산분 복원) 미반영 — 현행 0 리셋이 맞다.
+//                  *          NVR 의 LastSOC 는 SysSocInitF + 적산분이 이미 더해진
+//                  *          최종 SOC(Bat80VSOCF) 라서, 여기서 SysAhF 까지 되살리면
+//                  *          SysSOCF = SysSocInitF + SysAhF 계산에서 적산분이
+//                  *          두 번 더해진다. LastAh 는 이력 확인용으로만 저장한다.
+//                  *--------------------------------------------------------------*/
+//                 Farasis56AhSocRegs.SysAhF    = 0.0F;   // TODO : [검증] 260831_Note1, 0.18 F-7 검토 결과 현행 유지
+//                 Farasis56AhSocRegs.SysAhOldF = 0.0F;
+//                 Farasis56AhSocRegs.SysAhNewF = 0.0F;
+//                 /* 최종 SOC */
+//                 Farasis56AhSocRegs.SysSOCF = Farasis56AhSocRegs.SysSocInitF;
                  /*----------------------------------------
                   * 5. 상태 전이
                   *----------------------------------------*/
@@ -885,9 +949,34 @@ void main(void)
 
                 break;
                 case NVRAM_NVRSocInit :
-                    NVRZoneAWRRegs.LastSOC          = CANARegs.NVRSocInit;
-                    Farasis56AhSocRegs.SysSocInitF  = CANARegs.NVRSocInit;
-                    Farasis56AhSocRegs.CTCount=0;
+                    /*--------------------------------------------------------------
+                     * 260902 : CAN 수동 SOC 설정 결함 4건 수정.
+                     *          (1) NVRSocInit 은 0.1% 단위(raw 1000 = 100.0%)인데
+                     *              10 으로 나누지 않아 SOC 가 10배로 들어갔다.
+                     *          (2) 0~100% 범위 검증이 없었다.
+                     *          (3) 트리거와 SEQ 를 지우지 않아 SEQ 가 이 case 에
+                     *              머물렀다. 주기 저장(AZoneSave)이 멈추고 매 주기
+                     *              SOC 를 다시 강제해 전류 적산분이 반영되지 않았다.
+                     *          (4) 적산분(SysAhF)을 0 으로 되돌리지 않아 명령값에
+                     *              직전 적산분이 그대로 더해졌다.
+                     *--------------------------------------------------------------*/
+                    //NVRZoneAWRRegs.LastSOC          = CANARegs.NVRSocInit;
+                    //Farasis56AhSocRegs.SysSocInitF  = CANARegs.NVRSocInit;
+                    //Farasis56AhSocRegs.CTCount=0;
+
+                    SocSetF = (float32)CANARegs.NVRSocInit / 10.0F;                   // TODO : [검증] 260902_Note1, 0.21 raw 0.1% -> %
+                    if(SocSetF > 100.0F)    { SocSetF = 100.0F; }                     // TODO : [검증] 260902_Note1, 0.21 상한 clamp
+                    else if(SocSetF < 0.0F) { SocSetF = 0.0F;   }                     // TODO : [검증] 260902_Note1, 0.21 하한 clamp
+                    NVRZoneAWRRegs.LastSOC             = (int16)(SocSetF * 10.0F);    // TODO : [검증] 260902_Note1, 0.21 clamp 값으로 저장
+                    Farasis56AhSocRegs.SysSocInitF     = SocSetF;                     // TODO : [검증] 260902_Note1, 0.21 기준 SOC 교체
+                    Farasis56AhSocRegs.SysAhF          = 0.0F;                        // TODO : [검증] 260902_Note1, 0.21 명령값이 정확히 안착하도록 적산 리셋
+                    Farasis56AhSocRegs.SysAhOldF       = 0.0F;                        // TODO : [검증] 260902_Note1, 0.21
+                    Farasis56AhSocRegs.SysAhNewF       = 0.0F;                        // TODO : [검증] 260902_Note1, 0.21
+                    Farasis56AhSocRegs.SysSOCF         = SocSetF;                     // TODO : [검증] 260902_Note1, 0.21 즉시 반영
+                    Farasis56AhSocRegs.CTCount         = 0;
+                    CANARegs.NVRSetRegs.bit.NVRSocInit = 0;                           // TODO : [검증] 260902_Note1, 0.21 1회성 트리거 클리어
+                    NVRZoneAWRRegs.NVramtatusRegs.bit.NVRSocInit = 0;                 // TODO : [검증] 260902_Note1, 0.21 재진입 방지
+                    NVRAllRegs.SEQ                     = NVRAM_AZoneSave;             // TODO : [검증] 260902_Note1, 0.21 주기 저장 복귀
                   //  NVRAM_AZoneSaveHandler(&NVRZoneAWRRegs);
                   //  SysRegs.SysMachine=System_STATE_READY;
                   //  NVRAllRegs.SEQ=NVRAM_AZoneRead;
@@ -1305,29 +1394,63 @@ interrupt void cpu_timer0_isr(void)
                 }
        break;
        case 23:
+                /*--------------------------------------------------------------
+                 * 260910 : PackISO_ERR(isoSPI 통신 에러) 판정 신설.
+                 *          비트 정의만 있고 세팅 로직이 없어 항상 0이었다.
+                 *          ltc_error_count 는 LTC6804_read_cmd 에서 PEC 일치 시
+                 *          0 으로 리셋되므로 연속 실패 횟수를 뜻한다.
+                 *          CAN 송신 여부와 무관하게 판정해야 하므로
+                 *          CANCOMEnable 조건 밖에 둔다.
+                 *--------------------------------------------------------------*/
+                if((ltc_state == 0) || (ltc_error_count > C_IsoSpiErrLimit))
+                {
+                    SysRegs.BAT80VFaultReg.bit.PackISO_ERR = 1;   // TODO : [검증] 260910_Note1, 0.21 isoSPI 통신 에러 Fault 세트(임계 200)
+                }
+                else
+                {
+                    SysRegs.BAT80VFaultReg.bit.PackISO_ERR = 0;   // TODO : [검증] 260910_Note1, 0.21 통신 정상이면 해제
+                }
+
                 if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                 {
+                    /*--------------------------------------------------------------
+                     * 260910 : 0 리셋 → 200 포화로 변경.
+                     *          리셋 방식이면 통신 두절 시 0x608 의
+                     *          Slave1/2_Err 가 0~200 을 순환해 정상(0)과
+                     *          구분되지 않는 구간이 생긴다.
+                     *          ErrorCountA/B 는 이미 포화 방식이다.
+                     *          규약 0x608 Max 가 200 이므로 상한은 200 유지.
+                     *--------------------------------------------------------------*/
+                    //if(Slave1Regs.ErrorCount>200)
+                    //{
+                    //    Slave1Regs.ErrorCount=0;
+                    //}
+                    //if(Slave2Regs.ErrorCount>200)
+                    //{
+                    //    Slave2Regs.ErrorCount=0;
+                    //}
                     if(Slave1Regs.ErrorCount>200)
                     {
-                        Slave1Regs.ErrorCount=0;
+                        Slave1Regs.ErrorCount=200;   // TODO : [검증] 260910_Note1, 0.21 리셋→200 포화 (진단값 순환 방지)
                     }
                     if(Slave2Regs.ErrorCount>200)
                     {
-                        Slave2Regs.ErrorCount=0;
+                        Slave2Regs.ErrorCount=200;   // TODO : [검증] 260910_Note1, 0.21 리셋→200 포화 (진단값 순환 방지)
                     }
                     /*--------------------------------------------------------------
-                     * 260901 : 0x608 카운터 배치 R13 정합 — 16bit×3 + 8bit×2 (byte 단위)
-                     *   byte0~1 CANRxCount(전체) / byte2~3 CT_RxCount(전류센서 0x3C5) /
-                     *   byte4~5 VCU_RxCount(IFCU 0x450) / byte6 Slave1_Err / byte7 Slave2_Err
-                     *   ※ VCU_RxCount는 MailBox2RxCount(0~200)로 — SysCanRxCount(11000) 248 이슈 해소
+                     * 260910 : 0x608 배치 R14 정합 — 8bit×4 + 예약16bit + 8bit×2
+                     *   byte0 CANRxCount / byte1 CT_RxCount / byte2 VCU_RxCount /
+                     *   byte3 SpiTimeout(신규) / byte4~5 예약(0) /
+                     *   byte6 Slave1_Err / byte7 Slave2_Err
+                     *   카운터 3종을 16bit→8bit 로 줄여 SpiTimeout 자리를 확보.
+                     *   모든 카운터는 0~200 범위라 8bit 로 손실 없음(0xFF 마스크).
                      *--------------------------------------------------------------*/
-                    //CANARegs.CANTxA = ComBine(CANARegs.MailBox0RxCount,CANARegs.MailBoxRxCount);
-                    //CANARegs.CANTxB = ComBine(SysRegs.SysCanRxCount,CANARegs.MailBox2RxCount);
-                    //CANARegs.CANTxC = ComBine(Slave2Regs.ErrorCount,Slave1Regs.ErrorCount);
-                    //CANARegs.CANTxD = 0;
-                    CANARegs.CANTxA = CANARegs.MailBoxRxCount;                                // TODO : [검증] 260901_Note1, 0.17 R13 byte0~1(16bit) CANRxCount(전체 CAN Rx)
-                    CANARegs.CANTxB = CANARegs.MailBox0RxCount;                               // TODO : [검증] 260901_Note1, 0.17 R13 byte2~3(16bit) CT_RxCount(전류센서 0x3C5)
-                    CANARegs.CANTxC = CANARegs.MailBox2RxCount;                               // TODO : [검증] 260901_Note1, 0.17 R13 byte4~5(16bit) VCU_RxCount(IFCU 0x450, 0~200)
+                    //CANARegs.CANTxA = CANARegs.MailBoxRxCount;                                // TODO : [검증] 260901_Note1, 0.17 R13 byte0~1(16bit) CANRxCount(전체 CAN Rx)
+                    //CANARegs.CANTxB = CANARegs.MailBox0RxCount;                               // TODO : [검증] 260901_Note1, 0.17 R13 byte2~3(16bit) CT_RxCount(전류센서 0x3C5)
+                    //CANARegs.CANTxC = CANARegs.MailBox2RxCount;                               // TODO : [검증] 260901_Note1, 0.17 R13 byte4~5(16bit) VCU_RxCount(IFCU 0x450, 0~200)
+                    CANARegs.CANTxA = ComBine((CANARegs.MailBox0RxCount & 0x00FF),(CANARegs.MailBoxRxCount  & 0x00FF));   // TODO : [검증] 260910_Note1, 0.21 R14 byte0 CANRxCount, byte1 CT_RxCount
+                    CANARegs.CANTxB = ComBine((SpiTimeoutCount          & 0x00FF),(CANARegs.MailBox2RxCount & 0x00FF));   // TODO : [검증] 260910_Note1, 0.21 R14 byte2 VCU_RxCount, byte3 SpiTimeout(신규)
+                    CANARegs.CANTxC = 0x0000;                                                 // TODO : [검증] 260910_Note1, 0.21 R14 byte4~5 예약(0)
                     CANARegs.CANTxD = ComBine(Slave2Regs.ErrorCount,Slave1Regs.ErrorCount);   // TODO : [검증] 260809_Note1, 0.16 byte6 Slave1_Err, byte7 Slave2_Err
                     CANATX(0x608,8,CANARegs.CANTxA,CANARegs.CANTxB,CANARegs.CANTxC, CANARegs.CANTxD);
                     /*--------------------------------------------------------------

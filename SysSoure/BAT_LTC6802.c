@@ -109,8 +109,16 @@ void BATSPIEnable_low(void)
      *          CS Low 직전에 BATIC 설정을 직접 기입한다.
      *          SPICLK = LSPCLK(20MHz) / (SPIBRR+1), 60 = 328kHz
      *--------------------------------------------------------------*/
-    SpiaRegs.SPICCR.bit.CLKPOLARITY = 1;        // TODO : [검증] 260901_Note1, 0.18 BATIC 극성 (Falling edge output)
-    SpiaRegs.SPIBRR                 = 60;       // TODO : [검증] 260901_Note1, 0.18 BATIC 속도 328kHz (현재 동작 확인된 값)
+    /*--------------------------------------------------------------
+     * 260910 : 절연시험 결과 — 이 기입을 빼면 LTC6804 통신 불능.
+     *          R0 백업에는 NVRAM 코드 자체가 없어 SPIBRR 오염원이
+     *          없었으나, 현재는 부팅 시 NVR_Init()/NVRAM_SelfTest()
+     *          (main.c) 가 SPIBRR 을 50 으로 덮어쓰고 복원하지 않는다.
+     *          따라서 BATIC 은 CS Low 직전에 자기 설정을 매번 기입해야
+     *          한다. 시험 위해 일시 제거했던 2줄을 원복한다.
+     *--------------------------------------------------------------*/
+    SpiaRegs.SPICCR.bit.CLKPOLARITY = 1;        // TODO : [검증] 260910_Note1, 0.21 BATIC 극성 (Falling edge output)
+    SpiaRegs.SPIBRR                 = 60;       // TODO : [검증] 260910_Note1, 0.21 BATIC 속도 328kHz (NVRAM SPIBRR=50 오염 복구)
 
     GpioDataRegs.GPACLEAR.bit.GPIO10 = 1;
 //  delay_us(50);
@@ -704,10 +712,18 @@ void SalveTempsVoltHandler(SlaveReg *s)// Battery IC
     float32 TempsCVaule1X=0;
     float32 TempsDVaule0x=0;
     float32 TempsVaule =0;
+    /*--------------------------------------------------------------
+     * 260910 : 통신 성공 시 ErrorCount 를 0 으로 리셋한다.
+     *          기존에는 실패할 때 증가만 하고 리셋이 없어, 한 번 오른
+     *          값이 통신 복구 후에도 남아 0x608 Slave1/2_Err 이 계속
+     *          에러로 보였다. 리셋을 넣어 ltc_error_count 와 동일한
+     *          "연속 실패 카운터" 로 동작시킨다.
+     *--------------------------------------------------------------*/
     s->Error= LTC6804_write_cmd(s->ID,LTC6804_CMD_ADAX |(1 << 8)|(0 << 4)|(0 << 0),0, 0);
     if(s->Error==1)
     {
         s->Error=0;
+        s->ErrorCount=0;                    // TODO : [검증] 260910_Note1, 0.21 통신 성공 시 리셋
     }
     else
     {
@@ -717,6 +733,7 @@ void SalveTempsVoltHandler(SlaveReg *s)// Battery IC
     if(s->Error==1)
     {
         s->Error=0;
+        s->ErrorCount=0;                    // TODO : [검증] 260910_Note1, 0.21 통신 성공 시 리셋
         //s->GPIO0ADC                         =((s->ADCV[1] << 8) & 0xff00) | (s->ADCV[0]  & 0x00ff);//GPIO1
         //s->CellTemperatureADC[1]            =((s->ADCV[3] << 8) & 0xff00) | (s->ADCV[2]  & 0x00ff);//GPIO2
         //s->CellTemperatureADC[2]            =((s->ADCV[5] << 8) & 0xff00) | (s->ADCV[4]  & 0x00ff);//GPIO3
@@ -729,6 +746,7 @@ void SalveTempsVoltHandler(SlaveReg *s)// Battery IC
     if(s->Error==1)
     {
         s->Error=0;
+        s->ErrorCount=0;                    // TODO : [검증] 260910_Note1, 0.21 통신 성공 시 리셋
       //  s->CellTemperatureADC[3]             =((s->ADCV[1] << 8) & 0xff00) | (s->ADCV[0]  & 0x00ff);//GPIO4
         s->CellTemperatureADC[s->TempsChSelet] =((s->ADCV[3] << 8) & 0xff00) | (s->ADCV[2]  & 0x00ff);//GPIO5
         s->GPIORef                             =((s->ADCV[5] << 8) & 0xff00) | (s->ADCV[4]  & 0x00ff);//Ref
