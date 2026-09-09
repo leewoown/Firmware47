@@ -136,6 +136,12 @@ SlaveReg        Slave2Regs;
 //SlaveReg        Slave3Regs;
 
 NVRAllReg       NVRAllRegs;
+/*--------------------------------------------------------------
+ * 260910 : NVR_Init() 지연 호출용 1회 실행 플래그.
+ *          부팅 시퀀스에서 NVRAM SPI 를 쓰면 BATIC 통신이
+ *          죽으므로, INIT 상태 종료 시점으로 미뤄 실행한다.
+ *--------------------------------------------------------------*/
+Uint16          NvrInitDone = 0U;   // TODO : [검증] 260910_Note1, 0.22 0=미실행 / 1=쓰기보호 해제 완료
 NVRZoneAReg     NVRZoneAWRRegs;
 NVRZoneAReg     NVRZoneARDRegs;
 NVRZoneAReg     NVRZoneAInitRegs;
@@ -245,24 +251,31 @@ void main(void)
     InitFlash();
 
     /*--------------------------------------------------------------
-     * 260910 : BATIC SPI 통신 불능 원인 = 이 두 호출에서 부팅 중 멈춤.
-     *          내부 SPI_Write/SPI_Read 가 타임아웃 없는 무한대기라
-     *          여기서 걸리면 while(1) 진입 자체가 안 되어 LTC6804
-     *          통신이 시작조차 못 했다(ltc_error_count 0 고정).
-     *          절연시험으로 원인 확정 후, F2806x_Spi.c 의 대기 루프에
-     *          타임아웃(C_SpiWaitTimeout)을 넣고 원복한다.
-     *          NVRAM 이 응답 없어도 부팅은 진행되며, 이상 여부는
-     *          SpiTimeoutCount 로 관측한다.
+     * 260910 : BATIC(LTC6804) 통신 불능 추적 경위 — 이 두 호출이 발단.
+     *   1) 원인 : 타임아웃 없는 SPI 대기 루프에서 멈춰 main 의
+     *             while(1) 진입 자체가 안 됐다(ltc_error_count 0 고정).
+     *   2) 대책 : F2806x_Spi.c 대기 루프에 타임아웃(C_SpiWaitTimeout)
+     *             + SPI SW reset 복구를 넣어 정지가 아닌 관측 가능한
+     *             실패로 바꿨다.
+     *   3) 진단 : CAN 0x608(R15) byte4 SRStatus = NORM(0x02) 로
+     *             NVRAM 칩 응답·쓰기보호 해제 성공을 확인했다.
+     *             무응답(0xFF)이 아니었다. 다만 byte5 NvrOk = NG,
+     *             byte6~7 IsoSpiErr = 161 로, SelfTest 의 SPI 전송
+     *             (16byte write+read 약 40 회)이 BATIC 통신을
+     *             방해함이 드러났다.
+     *   4) 결론 : NVR_Init(쓰기보호 해제, 약 3 회 전송)만 유지하고
+     *             SelfTest(진단 전용, 기능 무관)는 제거한다.
      *--------------------------------------------------------------*/
+    // NVR_Init();                     // TODO : [검증] 260910_Note1, 0.22 F-1 쓰기보호 해제 (SRStatus=NORM 확인됨, 유지)
     /*--------------------------------------------------------------
-     * 260910 : 재차 제거. 타임아웃을 넣고 원복했더니 CAN 0x608 의
-     *          BMS_SpiTimeout 이 10 으로 관측되었다 — NVRAM 이 실제로
-     *          응답하지 않아 이 두 호출이 전부 타임아웃된다는 뜻이다.
-     *          BATIC 통신 확보를 우선하여 다시 제거하고, NVRAM 무응답
-     *          원인은 별도 규명한다. (SPI 복구 로직은 F2806x_Spi.c 유지)
+     * 260910 : SelfTest 만 제거. 16byte write+read 로 SPI 전송이
+     *          약 40 회라 BATIC 통신을 방해한다
+     *          (CAN 관측 : BMS_IsoSpiErr 161, SpiTimeout 10).
+     *          NVR_Init 은 쓰기보호 해제라 기능상 필수이므로 유지하며,
+     *          SRStatus=NORM 으로 해제 성공이 이미 확인되었다.
+     *          NvrOk 는 미실행(0=NOTRUN)으로 남는다.
      *--------------------------------------------------------------*/
-    //NVR_Init();                     // TODO : [검증] 260910_Note1, 0.21 NVRAM 무응답(SpiTimeout=10)으로 제거 — 원인 규명 후 재도입 (F-1 쓰기보호 해제)
-    //NVRAM_SelfTest();               // TODO : [검증] 260910_Note1, 0.21 NVRAM 무응답(SpiTimeout=10)으로 제거 — 원인 규명 후 재도입 (F-3 부팅 1회 왕복 진단)
+    //NVRAM_SelfTest();               // TODO : [검증] 260910_Note1, 0.22 BATIC 간섭으로 제거 (F-3 진단 전용, 기능 무관)
 
     ConfigCpuTimer(&CpuTimer0, 80, 1000);
     //CpuTimer0Regs.PRD.all = 80000;// 90000 is 1msec
@@ -496,7 +509,18 @@ void main(void)
                 //      Farasis56AhSocRegs.NVRSocInitF = 0.0F;
                 //  }
                 /* NVR 유효성 검증 — 비정상이면 무효 마커(-1)로 표시 */
-                if((NVRZoneARDRegs.LastSOC < 0) ||                         /* 음수 (0xFFFF=-1 포함) */
+                /*--------------------------------------------------------------
+                 * 260910 : LastSOC == 0 을 무효 조건에 추가(< 0 → <= 0).
+                 *          NVRAM 쓰기보호(BP)가 풀리지 않아 한 번도 저장되지
+                 *          못한 초기 상태(0)가 "SOC 0%" 로 유효 판정되어,
+                 *          OCV 계산값(셀 3.55V → 약 17%)을 덮어썼다.
+                 *          delta = |17 - 0| = 17 이라 20% 임계 안에 들어
+                 *          NVR 이 우선 채택된 것이 원인이다.
+                 *          SOC 0% 로 방전된 팩은 셀 저전압 보호에 먼저
+                 *          걸리므로, 0 은 정상값이 아니라 미저장으로 본다.
+                 *--------------------------------------------------------------*/
+                //if((NVRZoneARDRegs.LastSOC < 0) ||                       /* 음수 (0xFFFF=-1 포함) */
+                if((NVRZoneARDRegs.LastSOC <= 0) ||                        // TODO : [검증] 260910_Note1, 0.22 0=미저장 → 무효(OCV 강제)
                 (NVRZoneARDRegs.LastSOC > 1000) ||                         /* 100% 초과 */
                 (NVRZoneARDRegs.MetaVersion == 0xFFFF) ||                  /* 첫 부팅 (Flash 미초기화) */
                 (NVRZoneARDRegs.MetaVersion == 0))                         /* MetaVersion 손상 */
@@ -631,6 +655,22 @@ void main(void)
                  if(SysRegs.BAT80VStateReg.bit.SysFault==1)
                  {
                     CANARegs.BAT80VStatus.bit.BATStatus=4;
+                 }
+                 /*--------------------------------------------------------------
+                  * 260910 : NVR_Init() 을 부팅 시퀀스에서 여기로 이동.
+                  *          while(1) 진입 전(= LTC6804 초기화 전)에 SPI 를
+                  *          쓰면 BATIC 이 비정상 상태가 되어 셀 전압을 전혀
+                  *          읽지 못한다(실측 : 셀 전압이 memset 초기값
+                  *          3.25V 로 고정, IsoSpiErr 계속 증가).
+                  *          런타임 NVRAM 접근(AZoneSave/Read)은 정상이므로,
+                  *          INIT 이 끝나 LTC6804 초기화·셀전압 취득이 완료된
+                  *          이 시점에 쓰기보호 해제를 1 회만 수행한다.
+                  *          ※ NVR_Init() 을 부팅 시퀀스로 되돌리지 말 것.
+                  *--------------------------------------------------------------*/
+                 if(NvrInitDone == 0U)
+                 {
+                     NVR_Init();                          // TODO : [검증] 260910_Note1, 0.22 지연 호출 (F-1 쓰기보호 해제, SRStatus 기록)
+                     NvrInitDone = 1U;                    // TODO : [검증] 260910_Note1, 0.22 1회만 실행
                  }
                  SysRegs.SysMachine=System_STATE_STANDBY;
             break;
@@ -1402,14 +1442,34 @@ interrupt void cpu_timer0_isr(void)
                  *          CAN 송신 여부와 무관하게 판정해야 하므로
                  *          CANCOMEnable 조건 밖에 둔다.
                  *--------------------------------------------------------------*/
-                if((ltc_state == 0) || (ltc_error_count > C_IsoSpiErrLimit))
-                {
-                    SysRegs.BAT80VFaultReg.bit.PackISO_ERR = 1;   // TODO : [검증] 260910_Note1, 0.21 isoSPI 통신 에러 Fault 세트(임계 200)
-                }
-                else
-                {
-                    SysRegs.BAT80VFaultReg.bit.PackISO_ERR = 0;   // TODO : [검증] 260910_Note1, 0.21 통신 정상이면 해제
-                }
+                /*--------------------------------------------------------------
+                 * 260910 : ltc_state 단독 조건 제거.
+                 *          ltc_state 는 직전 read 1회 결과라, PEC 가 한 번만
+                 *          어긋나도 즉시 폴트가 서고 다음 성공에 풀려
+                 *          플래그가 깜빡였다(CAN 관측 : PackISO_ERR 간헐 펄스).
+                 *          그 탓에 임계값 C_IsoSpiErrLimit(200) 이 한 번도
+                 *          쓰이지 않았다. 연속 실패 카운터만으로 판정한다.
+                 *--------------------------------------------------------------*/
+                /*--------------------------------------------------------------
+                 * 260910 : PackISO_ERR 판정 일시 비활성.
+                 *          BATIC 통신 원인 규명 중 폴트가 서면 보호 동작이
+                 *          끼어들어 절연시험을 방해한다. 비트 정의
+                 *          (DSP28x_Project.h bit19 → CAN35)는 그대로 두고
+                 *          세트 로직만 막는다. 세트하는 곳이 없으므로
+                 *          값은 0(Nor)로 유지된다.
+                 *          통신 안정화 후 원복할 것.
+                 *          진단은 0x608 byte6~7 IsoSpiErr 로 계속 가능하다.
+                 *--------------------------------------------------------------*/
+                //if((ltc_state == 0) || (ltc_error_count > C_IsoSpiErrLimit))
+                //if(ltc_error_count > C_IsoSpiErrLimit)
+                //{
+                //    SysRegs.BAT80VFaultReg.bit.PackISO_ERR = 1;   // TODO : [검증] 260910_Note1, 0.22 isoSPI 연속 실패 200회 초과 시 Fault
+                //}
+                //else
+                //{
+                //    SysRegs.BAT80VFaultReg.bit.PackISO_ERR = 0;   // TODO : [검증] 260910_Note1, 0.22 통신 정상이면 해제
+                //}
+                //[비활성] 260910_Note1, 0.22 PackISO_ERR 판정 일시 제거 — 통신 규명 후 원복
 
                 if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                 {
@@ -1438,20 +1498,29 @@ interrupt void cpu_timer0_isr(void)
                         Slave2Regs.ErrorCount=200;   // TODO : [검증] 260910_Note1, 0.21 리셋→200 포화 (진단값 순환 방지)
                     }
                     /*--------------------------------------------------------------
-                     * 260910 : 0x608 배치 R14 정합 — 8bit×4 + 예약16bit + 8bit×2
+                     * 260910 : 0x608 배치 R14 정합 — 8bit×4 + 예약16bit + 16bit
                      *   byte0 CANRxCount / byte1 CT_RxCount / byte2 VCU_RxCount /
-                     *   byte3 SpiTimeout(신규) / byte4~5 예약(0) /
-                     *   byte6 Slave1_Err / byte7 Slave2_Err
+                     *   byte3 SpiTimeout / byte4~5 예약(0) /
+                     *   byte6~7 IsoSpiErr(= ltc_error_count, 16bit)
                      *   카운터 3종을 16bit→8bit 로 줄여 SpiTimeout 자리를 확보.
                      *   모든 카운터는 0~200 범위라 8bit 로 손실 없음(0xFF 마스크).
+                     *
+                     *   byte6~7 : Slave1/2_Err(8bit×2) → ltc_error_count 로 교체.
+                     *   Slave1/2Regs.ErrorCount 는 SalveTempsVoltHandler(온도 GPIO)
+                     *   경로만 세어 셀전압 읽기 실패가 보이지 않았다.
+                     *   ltc_error_count 는 LTC6804_read_cmd 모든 경로에서 갱신되어
+                     *   통신 실패를 대표하며, PackISO_ERR 판정과 동일한 소스다.
+                     *   포화가 없어 8bit wrap 을 피하려 16bit 로 싣는다.
                      *--------------------------------------------------------------*/
                     //CANARegs.CANTxA = CANARegs.MailBoxRxCount;                                // TODO : [검증] 260901_Note1, 0.17 R13 byte0~1(16bit) CANRxCount(전체 CAN Rx)
                     //CANARegs.CANTxB = CANARegs.MailBox0RxCount;                               // TODO : [검증] 260901_Note1, 0.17 R13 byte2~3(16bit) CT_RxCount(전류센서 0x3C5)
                     //CANARegs.CANTxC = CANARegs.MailBox2RxCount;                               // TODO : [검증] 260901_Note1, 0.17 R13 byte4~5(16bit) VCU_RxCount(IFCU 0x450, 0~200)
                     CANARegs.CANTxA = ComBine((CANARegs.MailBox0RxCount & 0x00FF),(CANARegs.MailBoxRxCount  & 0x00FF));   // TODO : [검증] 260910_Note1, 0.21 R14 byte0 CANRxCount, byte1 CT_RxCount
                     CANARegs.CANTxB = ComBine((SpiTimeoutCount          & 0x00FF),(CANARegs.MailBox2RxCount & 0x00FF));   // TODO : [검증] 260910_Note1, 0.21 R14 byte2 VCU_RxCount, byte3 SpiTimeout(신규)
-                    CANARegs.CANTxC = 0x0000;                                                 // TODO : [검증] 260910_Note1, 0.21 R14 byte4~5 예약(0)
-                    CANARegs.CANTxD = ComBine(Slave2Regs.ErrorCount,Slave1Regs.ErrorCount);   // TODO : [검증] 260809_Note1, 0.16 byte6 Slave1_Err, byte7 Slave2_Err
+                    //CANARegs.CANTxC = 0x0000;                                               // TODO : [검증] 260910_Note1, 0.21 R14 byte4~5 예약(0)
+                    CANARegs.CANTxC = ComBine((NVRAllRegs.NvrOk & 0x00FF),(NVRAllRegs.SRStatus & 0x00FF));   // TODO : [검증] 260910_Note1, 0.22 R15 byte4 NvrSRStatus(0xFF=무응답), byte5 NvrOk(0=미실행/1=정상/2=실패)
+                    //CANARegs.CANTxD = ComBine(Slave2Regs.ErrorCount,Slave1Regs.ErrorCount);   // TODO : [검증] 260809_Note1, 0.16 byte6 Slave1_Err, byte7 Slave2_Err
+                    CANARegs.CANTxD = (unsigned int)ltc_error_count;                          // TODO : [검증] 260910_Note1, 0.22 byte6~7 IsoSpiErr(연속 PEC 실패, 0 정상)
                     CANATX(0x608,8,CANARegs.CANTxA,CANARegs.CANTxB,CANARegs.CANTxC, CANARegs.CANTxD);
                     /*--------------------------------------------------------------
                      * 260808 : AlarmNum 미사용(write-only) 제거 예정

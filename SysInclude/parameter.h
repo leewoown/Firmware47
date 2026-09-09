@@ -319,7 +319,8 @@ Parameter
 //#define     Product_Version                    19   // TODO : [변경] 260901_Note1, 0.19 Product_Version 18->19 (보호설정표 R9 반영)
 //#define     Product_Version                    20   // (0.20 커밋 완료분: 7be1092)
 //#define     Product_Version                    21   // (0.21 baseline — BATIC SPI 통신 불능 발생, V0.22 에서 복구)
-#define     Product_Version                      22   // TODO : [변경] 260910_Note1, 0.22 Product_Version 21->22 (BATIC SPI 복구 + isoSPI 판정 + SOC 결함 수정)
+//#define     Product_Version                    22   // (0.22 커밋 완료분: 64c69f3)
+#define     Product_Version                      23   // TODO : [변경] 260910_Note1, 0.23 Product_Version 22->23 (NVRAM 지연초기화 + isoSPI 판정 보완 + 0x608 R14)
 /*--------------------------------------------------------------
  * 260831 : 디버깅보드 시험모드 해제 — 모사장치 CAN 대신 실기 isoSPI 사용.
  *          셀 전압/온도를 LTC6804 에서 직접 취득하며,

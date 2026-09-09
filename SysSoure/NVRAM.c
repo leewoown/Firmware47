@@ -143,7 +143,15 @@ void NVRAM_SelfTest(void)
             break;
         }
     }
-    NVRAllRegs.NvrOk = (TestError == 0U) ? 1U : 0U;  // TODO : [검증] 260831_Note1, 0.18 1=왕복 일치
+    /*--------------------------------------------------------------
+     * 260910 : 실패값 0 → 2. 초기값 0 과 겹쳐 "미실행"과 "실패"가
+     *          CAN(0x608 byte5 BMS_NvrOk)에서 구분되지 않았다.
+     *          NVR_Init()/NVRAM_SelfTest() 가 비활성인 빌드의 미실행
+     *          상태를 고장으로 오독하지 않도록 분리한다.
+     *          0=미실행(초기값) / 1=정상 / 2=실패  (규약 R15)
+     *--------------------------------------------------------------*/
+    //NVRAllRegs.NvrOk = (TestError == 0U) ? 1U : 0U;  // TODO : [검증] 260831_Note1, 0.18 1=왕복 일치
+    NVRAllRegs.NvrOk = (TestError == 0U) ? 1U : 2U;    // TODO : [검증] 260910_Note1, 0.22 0=미실행 / 1=정상 / 2=실패
 }
 void NVRAM_AZoneSaveHandler(NVRZoneAReg *p)
 {
