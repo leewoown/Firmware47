@@ -130,6 +130,13 @@ void ProtectRelayWakeUpHandle(PrtectRelayReg *p)
         if(p->State.bit.WakeUpState==0)
         {
 
+            /*--------------------------------------------------------------
+             * 260914 : HW/PCB 재배선 반영 — BATTERY N 직결(N 릴레이 제거),
+             *          N_RELAY(GPIO06) = P(주) 릴레이 코일, P_RELAY(GPIO22) = 초중(프리차지) 릴레이 코일.
+             *          새 시퀀스 : 프리차지(PRly/GPIO22) ON → 200ms → 주접점(NRly/GPIO06) ON → 100ms → 프리차지 OFF.
+             *          옛 배선 시퀀스(N→CHA→P)는 아래 블록에 주석 보존(검증 후 제거).
+             *--------------------------------------------------------------*/
+            /*
             NRlyOn;
             p->State.bit.NRelayDO=1;
             delay_ms(30);
@@ -138,10 +145,21 @@ void ProtectRelayWakeUpHandle(PrtectRelayReg *p)
             delay_ms(200);
             PRlyOn;
             p->State.bit.PRelayDO =1;
-            delay_ms(100);                  // TODOS : [검증] 260723_Note1,0.14 PRelay=1-> PreRelayDO=0 Delay 10msec -> 100msec 변경
+            delay_ms(100);
             CHARlyOff;
             p->State.bit.PreRelayDO=0;
             PRlyOff;
+            p->State.bit.WakeUpState=1;
+            */
+            p->State.bit.NRelayDO=1;        // TODO : [검증] 260914_Note1, 0.23 N 직결 상태 보고(항상 1)
+            PRlyOn;                         // TODO : [검증] 260914_Note1, 0.23 GPIO22 = 초중(프리차지) 릴레이 ON
+            p->State.bit.PreRelayDO=1;
+            delay_ms(200);
+            NRlyOn;                         // TODO : [검증] 260914_Note1, 0.23 GPIO06 = P(주) 릴레이 ON
+            p->State.bit.PRelayDO =1;
+            delay_ms(100);
+            PRlyOff;                        // TODO : [검증] 260914_Note1, 0.23 초중(프리차지) 릴레이 OFF
+            p->State.bit.PreRelayDO=0;
             p->State.bit.WakeUpState=1;
         }
     }
@@ -149,10 +167,19 @@ void ProtectRelayWakeUpHandle(PrtectRelayReg *p)
     {
         if(p->State.bit.WakeUpState==1)
         {
-            NRlyOff;
-            p->State.bit.NRelayDO=1;
-            delay_ms(250);
+            /*--------------------------------------------------------------
+             * 260914 : HW/PCB 재배선 반영 — OFF(웨이크업 해제) 시퀀스 정리.
+             *          delay_ms(250) 제거, PRelayDO=0 을 NRelayDO=1 앞으로 이동.
+             *          옛 시퀀스는 아래 주석 보존(검증 후 제거).
+             *--------------------------------------------------------------*/
+            //NRlyOff;
+            //p->State.bit.NRelayDO=1;
+            //delay_ms(250);
+            //p->State.bit.PRelayDO=0;
+            //p->State.bit.WakeUpState=0;
+            NRlyOff;                        // TODO : [검증] 260914_Note1, 0.23 GPIO06 = P(주) 릴레이 OFF
             p->State.bit.PRelayDO=0;
+            p->State.bit.NRelayDO=1;        // N 직결(항상 1)
             p->State.bit.WakeUpState=0;
         }
     }
