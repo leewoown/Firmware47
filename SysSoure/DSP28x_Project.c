@@ -671,24 +671,34 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
           }
       }
       // 셀 전압 편차 Alarm,유지시간카운터배열값:10,유지시간:100msec
-      if(Hyst_On(s->Bat80VCellDivVoltageF,C_CellVoltDIV_Warn))
+      /*--------------------------------------------------------------
+       * 261001 : 셀 전압편차 경고에 전류 게이트 추가.
+       *          슬레이브1·2 의 ADCV(변환시작) 시점이 약 3~4 ms 어긋나 있어
+       *          그 사이 전류가 변하면 dV = dI x R_cell 만큼 가짜 편차가 잡힌다.
+       *          1C(56A) 이하에서만 판정하고, 초과 구간에서는 카운터·경고비트를
+       *          직전 상태 그대로 둔다(해제도 하지 않는 보류).
+       *--------------------------------------------------------------*/
+      if(s->Bat80VCurrentAsbF <= C_CellVoltDIV_GateCurr)                                    // TODO : [검증] 261001_Note1, 0.24 1C 이하에서만 편차 경고 판정
       {
-          if(s->Bat80VAlarmCont[10]< C_CellVoltDIV_WarnDelay){++s->Bat80VAlarmCont[10];}
-          if(s->Bat80VAlarmCont[10]>=C_CellVoltDIV_WarnDelay)
+          if(Hyst_On(s->Bat80VCellDivVoltageF,C_CellVoltDIV_Warn))
           {
-              s->BAT80VAlarmReg.bit.CellVolt_BL=1;
+              if(s->Bat80VAlarmCont[10]< C_CellVoltDIV_WarnDelay){++s->Bat80VAlarmCont[10];}
+              if(s->Bat80VAlarmCont[10]>=C_CellVoltDIV_WarnDelay)
+              {
+                  s->BAT80VAlarmReg.bit.CellVolt_BL=1;
+              }
           }
-      }
-      else
-      {
-          if(s->BAT80VAlarmReg.bit.CellVolt_BL==0)
+          else
           {
-              s->Bat80VAlarmCont[10]=0;
-          }
-          if(Hyst_Off(s->Bat80VCellDivVoltageF,C_CellVoltDIV_WarnRst))
-          {
-              s->Bat80VAlarmCont[10]=0;
-              s->BAT80VAlarmReg.bit.CellVolt_BL=0;
+              if(s->BAT80VAlarmReg.bit.CellVolt_BL==0)
+              {
+                  s->Bat80VAlarmCont[10]=0;
+              }
+              if(Hyst_Off(s->Bat80VCellDivVoltageF,C_CellVoltDIV_WarnRst))
+              {
+                  s->Bat80VAlarmCont[10]=0;
+                  s->BAT80VAlarmReg.bit.CellVolt_BL=0;
+              }
           }
       }
       // 셀 과온 Alarm,유지시간카운터배열값:11,유지시간:100msec
@@ -947,21 +957,31 @@ void Cal80VSysFaultCheck(SystemReg *s)
           s->BAT80VFaulBuftReg.bit.CellVolt_UN=0;
       }
 
-      // No.26 셀 전압 편차 (Bsa_FltCellUnbalVlt, bit26) : 350mV 이상
-      if(s->Bat80VCellDivVoltageF >= C_CellVoltDIV_Fault)
+      // No.26 셀 전압 편차 (Bsa_FltCellUnbalVlt, bit26) : 400mV 이상
+      /*--------------------------------------------------------------
+       * 261001 : 셀 전압편차 차단에 전류 게이트 추가 (경고와 동일 사유).
+       *          슬레이브 간 ADCV 시점 차 3~4 ms 동안의 전류 변동이
+       *          dV = dI x R_cell 로 나타나 오차단을 일으킨다.
+       *          1C(56A) 이하에서만 판정한다. 이미 LATCH 된 FaultReg 는
+       *          게이트와 무관하게 유지되며 FCU_RESET 으로만 풀린다.
+       *--------------------------------------------------------------*/
+      if(s->Bat80VCurrentAsbF <= C_CellVoltDIV_GateCurr)                                    // TODO : [검증] 261001_Note1, 0.24 1C 이하에서만 편차 차단 판정
       {
-          s->BatFalutCont[10]++;
-          s->BAT80VFaulBuftReg.bit.CellVolt_BL=1;
-          if(s->BatFalutCont[10]>C_CellVoltDIV_FaultDelay)
+          if(s->Bat80VCellDivVoltageF >= C_CellVoltDIV_Fault)
           {
-              s->BatFalutCont[10]=C_CellVoltDIV_FaultDelay+10;
-              s->BAT80VFaultReg.bit.CellVolt_BL=1;
+              s->BatFalutCont[10]++;
+              s->BAT80VFaulBuftReg.bit.CellVolt_BL=1;
+              if(s->BatFalutCont[10]>C_CellVoltDIV_FaultDelay)
+              {
+                  s->BatFalutCont[10]=C_CellVoltDIV_FaultDelay+10;
+                  s->BAT80VFaultReg.bit.CellVolt_BL=1;
+              }
           }
-      }
-      else
-      {
-          s->BatFalutCont[10]=0;
-          s->BAT80VFaulBuftReg.bit.CellVolt_BL=0;
+          else
+          {
+              s->BatFalutCont[10]=0;
+              s->BAT80VFaulBuftReg.bit.CellVolt_BL=0;
+          }
       }
 
       // No.27 셀 고온 (Bsa_FltCellOt, bit27) : 최고셀 60도 이상

@@ -1167,7 +1167,15 @@ interrupt void cpu_timer0_isr(void)
        case 3:
                if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
                {
-
+                
+                   /*--------------------------------------------------------------
+                    * 260827 : 상위워드 강제 0 제거 — 규약 Protection bit32~39
+                    *          (CellIR_OV/PackOcTime_Err/PrtcOcEvent_Err 등)가 항상 0으로
+                    *          송신되고, FaultReg 원본까지 100ms마다 지워지던 문제.
+                    *          현재 상위비트는 set 로직이 없어 값 변화는 없음(규약 정합만 확보).
+                    *--------------------------------------------------------------*/
+                   //SysRegs.BAT80VFaultReg.Word.DataH=0X0000; // TODO : [검증] 260808_Note1, 0.15 VER15, VER17 이상 버전, 삭제
+                   CANATX(0x603,8,SysRegs.BAT80VAlarmReg.all,SysRegs.BAT80VFaultReg.Word.DataL,SysRegs.BAT80VFaultReg.Word.DataH,0X0000);   // TODO : [검증] 260827_Note1, 0.16 Protection bit16~39 원본 그대로 송신
                }
        break;
        case 5:
@@ -1331,18 +1339,7 @@ interrupt void cpu_timer0_isr(void)
        break;
        case 8:
                 //At 80MHZ, operation time is 0.151msec
-               if(SysRegs.BAT80VStateReg.bit.CANCOMEnable==1)
-               {
-                
-                   /*--------------------------------------------------------------
-                    * 260827 : 상위워드 강제 0 제거 — 규약 Protection bit32~39
-                    *          (CellIR_OV/PackOcTime_Err/PrtcOcEvent_Err 등)가 항상 0으로
-                    *          송신되고, FaultReg 원본까지 100ms마다 지워지던 문제.
-                    *          현재 상위비트는 set 로직이 없어 값 변화는 없음(규약 정합만 확보).
-                    *--------------------------------------------------------------*/
-                   //SysRegs.BAT80VFaultReg.Word.DataH=0X0000; // TODO : [검증] 260808_Note1, 0.15 VER15, VER17 이상 버전, 삭제
-                   CANATX(0x603,8,SysRegs.BAT80VAlarmReg.all,SysRegs.BAT80VFaultReg.Word.DataL,SysRegs.BAT80VFaultReg.Word.DataH,0X0000);   // TODO : [검증] 260827_Note1, 0.16 Protection bit16~39 원본 그대로 송신
-               }
+
        break;
        case 10:
                 /*--------------------------------------------------------------

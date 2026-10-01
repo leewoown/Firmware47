@@ -320,7 +320,8 @@ Parameter
 //#define     Product_Version                    20   // (0.20 커밋 완료분: 7be1092)
 //#define     Product_Version                    21   // (0.21 baseline — BATIC SPI 통신 불능 발생, V0.22 에서 복구)
 //#define     Product_Version                    22   // (0.22 커밋 완료분: 64c69f3)
-#define     Product_Version                      23   // TODO : [변경] 260910_Note1, 0.23 Product_Version 22->23 (NVRAM 지연초기화 + isoSPI 판정 보완 + 0x608 R14)
+//#define     Product_Version                    23   // TODO : [변경] 260910_Note1, 0.23 Product_Version 22->23 (NVRAM 지연초기화 + isoSPI 판정 보완 + 0x608 R14)
+#define     Product_Version                      24   // TODO : [변경] 261001_Note1, 0.24 Product_Version 23->24 (셀 전압편차 판정 전류 게이트 56A)
 /*--------------------------------------------------------------
  * 260831 : 디버깅보드 시험모드 해제 — 모사장치 CAN 대신 실기 isoSPI 사용.
  *          셀 전압/온도를 LTC6804 에서 직접 취득하며,
@@ -332,9 +333,7 @@ Parameter
  *          CAN 메일박스도 모사장치 ID(0x401~) 로 잡혀 있었다.
  *          값(1)과 우측 주석("실기 isoSPI")이 불일치 상태였음.
  *--------------------------------------------------------------*/
-//#define     DebugBoardMode                     1    // TODOS 260726_Note1, 0.14 디버깅보드 시험모드 (0:실기 isoSPI, 1이상:모사장치 CAN, 양산빌드 반드시 0)
-//#define     DebugBoardMode                     1    // TODO : [검증] 260831_Note1, 0.18 (값 오기 — 주석은 isoSPI 인데 값이 1)
-#define     DebugBoardMode                       0    // TODO : [검증] 260910_Note1, 0.21 실기 isoSPI 모드 복귀 (LTC6804 직접 취득)
+#define     DebugBoardMode                       0   // TODO : [검증] 261001_Note1, 0.24 시험용 1 -> 0 원복 (실기 isoSPI, LTC6804 직접 취득, 양산 필수 0)
 
 #if (DebugBoardMode != 0) && (Product_Type == 1)
 #error "DebugBoardMode must be 0 when Product_Type=1 (production build)"
@@ -437,6 +436,13 @@ Parameter
 #define     C_CellVoltUN_WarnRst                           3.015  // 셀 저전압 해제 : 초기값
 #define     C_CellVoltDIV_Warn                             0.2    // 셀 전압편차 경고 : 초기값(200mV)
 #define     C_CellVoltDIV_WarnRst                          0.0666667 // 셀 전압편차 해제 : 0.02(초기)->0.1(V0.12)->0.067(V0.15)->0.0666667(V0.16)
+/*--------------------------------------------------------------
+ * 261001 : 셀 전압편차 판정 전류 게이트 신규.
+ *          슬레이브1·2 의 ADCV(변환시작) 시점이 약 3~4 ms 어긋나 있어
+ *          그 사이 전류가 변하면 dV = dI x R_cell 만큼 가짜 편차가 잡힌다.
+ *          1C(56.4Ah 기준 56A) 이하 구간에서만 경고·차단을 판정한다.
+ *--------------------------------------------------------------*/
+#define     C_CellVoltDIV_GateCurr                         56.0   // 셀 전압편차 판정 허용 전류[A] : 신규(V0.24, 1C 기준)
 #define     C_CellTempOV_Warn                              55.0   // 셀 고온 경고 : 초기값
 #define     C_CellTempOV_WarnRst                           52.25  // 셀 고온 해제 : 52.25(초기)->52.3(V0.15)->52.25(V0.16)
 #define     C_CellTempUN_Warn                              -25.0  // 셀 저온 경고 : -20.0(초기)->-25.0(V0.15)->-20.0(V0.18)->-25.0(V0.19)
