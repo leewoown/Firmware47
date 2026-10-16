@@ -899,12 +899,13 @@ void main(void)
             SalveTempsHandler(&Slave2Regs);                                // TODOS 260726_Note1, 0.14 디버깅모드는 CAN(0x407~0x40C) 수신으로 대체
 
             delay_ms(1);
-            SysRegs.CellTempssampling=0;
-            // 
-            //Slave1Regs.BatICTempsF = Slave1Temps;   // [주석] 260901_Note1 요청 주석 처리 (구 798행)
+            
+            Slave1Regs.BatICTempsF = Slave1Temps;   // [주석] 260901_Note1 요청 주석 처리 (구 798행)
             SysRegs.Bat80VBATICTemperatureF = Slave1Regs.BatICTempsF;              // TODO : [검증] 260901_Note1, 0.17 R12 BATIC 내부온도
             CANARegs.BATIC_Temp = (int16)(SysRegs.Bat80VBATICTemperatureF * 10);   // TODO : [검증] 260901_Note1, 0.17 R12 0x609 0.1℃ factor
             LTC6804_DieTemperatureRead(BMS_ID_1, &Slave1Temps);
+
+            SysRegs.CellTempssampling=0;
 #endif
         }
         if((NVRAllRegs.SEQTimeTick>100)&&(SysRegs.BAT80VStateReg.bit.INITOK==1))

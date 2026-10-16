@@ -86,6 +86,17 @@ Note: In this software, the default inverter is supposed to be DMC1500 board.
 #define     C_TempsBGain                    46.665
 #define     C_TempsCGain                    -110.33
 #define     C_TempsDGain                    117.68
+/*--------------------------------------------------------------
+ * 261002 : BATIC 다이온도 보정 상수 분리.
+ *          실온 24℃ 에서 16.65℃ 출력(7.35℃ 저편차) 확인.
+ *          VREF2=30019(3.0019V) 로 ADC 정상 입증, 칩 2개 동일 경향이라
+ *          소자 편차가 아닌 체계적 오차. 1점 보정으로 대응한다.
+ *          용도는 CAN 0x602 D3 내부온도 보고 전용이며 보호 판정 무관.
+ *--------------------------------------------------------------*/
+#define     C_BatICTempsBase                -273.0   // TODO : [검증] 261002_Note1, 0.24 PTAT 기준값 (데이터시트는 -276)
+//#define     C_BatICTempsOffset            7.4      // 보정안(실온 24℃ 기준 1점 보정, 16.6 -> 24.0) — 미적용
+
+#define     C_BatICTempsOffset              0.0      // TODO : [튜닝] 261002_Note1, 0.24 무보정 유지 (원시 출력 16.6℃)
 
 typedef enum
 {

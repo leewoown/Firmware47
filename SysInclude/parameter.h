@@ -321,7 +321,8 @@ Parameter
 //#define     Product_Version                    21   // (0.21 baseline — BATIC SPI 통신 불능 발생, V0.22 에서 복구)
 //#define     Product_Version                    22   // (0.22 커밋 완료분: 64c69f3)
 //#define     Product_Version                    23   // TODO : [변경] 260910_Note1, 0.23 Product_Version 22->23 (NVRAM 지연초기화 + isoSPI 판정 보완 + 0x608 R14)
-#define     Product_Version                      24   // TODO : [변경] 261001_Note1, 0.24 Product_Version 23->24 (셀 전압편차 판정 전류 게이트 56A)
+//#define     Product_Version                    24   // TODO : [변경] 261001_Note1, 0.24 Product_Version 23->24 (셀 전압편차 판정 전류 게이트 56A)
+#define     Product_Version                      25   // TODO : [변경] 261016_Note1, 0.25 Product_Version 24->25 (셀 전압편차 판정 2000ms 대기 추가)
 /*--------------------------------------------------------------
  * 260831 : 디버깅보드 시험모드 해제 — 모사장치 CAN 대신 실기 isoSPI 사용.
  *          셀 전압/온도를 LTC6804 에서 직접 취득하며,
@@ -443,6 +444,7 @@ Parameter
  *          1C(56.4Ah 기준 56A) 이하 구간에서만 경고·차단을 판정한다.
  *--------------------------------------------------------------*/
 #define     C_CellVoltDIV_GateCurr                         56.0   // 셀 전압편차 판정 허용 전류[A] : 신규(V0.24, 1C 기준)
+#define     C_CellVoltDIV_GateHold                         2000   // TODO : [튜닝] 261016_Note1, 0.25 56A 이하 유지 후 편차 판정 대기[ms]
 #define     C_CellTempOV_Warn                              55.0   // 셀 고온 경고 : 초기값
 #define     C_CellTempOV_WarnRst                           52.25  // 셀 고온 해제 : 52.25(초기)->52.3(V0.15)->52.25(V0.16)
 #define     C_CellTempUN_Warn                              -25.0  // 셀 저온 경고 : -20.0(초기)->-25.0(V0.15)->-20.0(V0.18)->-25.0(V0.19)

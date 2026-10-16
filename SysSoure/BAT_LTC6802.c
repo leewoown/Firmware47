@@ -304,8 +304,8 @@ int LTC6804_DieTemperatureRead(int pack_id, float *temperature)
         return ret;
     }
     soc   =  ((buf[1] << 8) & 0xff00) |  (buf[0] & 0x00ff);
-    itmp   =  ((buf[3] << 8) & 0xff00) |  (buf[2] & 0x00ff);
-    va    =  ((buf[5] << 8) & 0xff00) | (buf[4] & 0x00ff);
+    itmp  =  ((buf[3] << 8) & 0xff00) |  (buf[2] & 0x00ff);
+    va    =  ((buf[5] << 8) & 0xff00) |  (buf[4] & 0x00ff);
     soc   = soc;
     va    = va;
     //*temperature = itmp;
@@ -313,7 +313,13 @@ int LTC6804_DieTemperatureRead(int pack_id, float *temperature)
        //  [die temp(C)] = (ITMP) * 100uV / (7.5mV) - 273
        // float tmp = (float)itmp * 100 / 7500 - 273.0;
    // *temperature=itmp;
-        *temperature = (float)itmp / 75.0 - 273.0;
+    /*--------------------------------------------------------------
+     * 261002 : 환산 상수를 헤더로 분리 — 재보정 시 BAT_LTC6802.h 한 곳만
+     *          고치면 되도록 한다. Offset=0.0 이라 현재 동작은 동일.
+     *--------------------------------------------------------------*/
+//      *temperature = (float)itmp / 75.0 - 273.0;
+
+        *temperature = (float)itmp / 75.0 + C_BatICTempsBase + C_BatICTempsOffset;   // TODO : [검증] 261002_Note1, 0.24 보정 상수 적용
 
 
     return ret;

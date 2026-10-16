@@ -424,6 +424,8 @@ void Cal80VSysTemperatureHandle(SystemReg *s)
     s->Bat80VCellAgvTemperatureF   = (float32)SysTemperatureBufF/CellSize;
 }
 
+static Uint16 CellDivGateHoldCnt = C_CellVoltDIV_GateHold;   // TODO : [검증] 261016_Note1, 0.25 편차 판정 대기 카운터(1ms 단위)
+
 void Cal80VSysCurrentHandle(SystemReg *s)
 {
     long  CurrentCT  = 0;
@@ -449,6 +451,23 @@ void Cal80VSysCurrentHandle(SystemReg *s)
     else
     {
         s->Bat80VCurrentAsbF =s->Bat80VCurrentF;
+    }
+
+    /* 셀 22개가 모두 저전류에서 새로 측정될 때까지 편차 판정 대기
+     *  - 전류값은 1ms 안에 바뀌지만, 셀 전압은 늦게 들어온다.
+     *  - 큰 전류가 멈춘 직후에는 옛 셀값과 새 셀값이 섞여
+     *    최대 - 최소가 가짜로 크게 나온다.
+     *  - 전류 > 56A  : 타이머를 2000(2초)으로 다시 채운다.
+     *  - 전류 <= 56A : 1ms마다 1씩 줄여 0까지 간다.
+     *  - 편차는 타이머가 0일 때만 판정한다.
+     */
+    if(s->Bat80VCurrentAsbF > C_CellVoltDIV_GateCurr)        // TODO : [검증] 261016_Note1, 0.25 56A 초과 시 대기 다시 채움
+    {
+        CellDivGateHoldCnt = C_CellVoltDIV_GateHold;         // TODO : [검증] 261016_Note1, 0.25
+    }
+    else if(CellDivGateHoldCnt > 0)                          // TODO : [검증] 261016_Note1, 0.25 56A 이하면 1ms마다 감소
+    {
+        CellDivGateHoldCnt--;                                // TODO : [검증] 261016_Note1, 0.25
     }
 
 }
@@ -678,7 +697,13 @@ void Cal80VSysAlarmtCheck(SystemReg *s)
        *          1C(56A) 이하에서만 판정하고, 초과 구간에서는 카운터·경고비트를
        *          직전 상태 그대로 둔다(해제도 하지 않는 보류).
        *--------------------------------------------------------------*/
-      if(s->Bat80VCurrentAsbF <= C_CellVoltDIV_GateCurr)                                    // TODO : [검증] 261001_Note1, 0.24 1C 이하에서만 편차 경고 판정
+      /*--------------------------------------------------------------
+       * 261016 : 전류 급감 직후 셀전압이 부하/무부하 값으로 섞여
+       *          가짜 편차(414mV)가 생겨 차단됨(그때 전류 0A라 게이트 통과).
+       *          순간 전류 대신, 56A 이하가 2000ms 유지된 뒤에만 판정한다.
+       *--------------------------------------------------------------*/
+      //if(s->Bat80VCurrentAsbF <= C_CellVoltDIV_GateCurr)                                    // TODO : [검증] 261001_Note1, 0.24 1C 이하에서만 편차 경고 판정
+      if(CellDivGateHoldCnt == 0)                                                            // TODO : [검증] 261016_Note1, 0.25 56A 이하 2s 유지 후에만 편차 경고 판정
       {
           if(Hyst_On(s->Bat80VCellDivVoltageF,C_CellVoltDIV_Warn))
           {
@@ -965,7 +990,12 @@ void Cal80VSysFaultCheck(SystemReg *s)
        *          1C(56A) 이하에서만 판정한다. 이미 LATCH 된 FaultReg 는
        *          게이트와 무관하게 유지되며 FCU_RESET 으로만 풀린다.
        *--------------------------------------------------------------*/
-      if(s->Bat80VCurrentAsbF <= C_CellVoltDIV_GateCurr)                                    // TODO : [검증] 261001_Note1, 0.24 1C 이하에서만 편차 차단 판정
+      /*--------------------------------------------------------------
+       * 261016 : 전류 급감 직후 가짜 편차로 차단됨(경고와 동일 사유).
+       *          56A 이하가 2000ms 유지된 뒤에만 판정한다.
+       *--------------------------------------------------------------*/
+      //if(s->Bat80VCurrentAsbF <= C_CellVoltDIV_GateCurr)                                    // TODO : [검증] 261001_Note1, 0.24 1C 이하에서만 편차 차단 판정
+      if(CellDivGateHoldCnt == 0)                                                            // TODO : [검증] 261016_Note1, 0.25 56A 이하 2s 유지 후에만 편차 차단 판정
       {
           if(s->Bat80VCellDivVoltageF >= C_CellVoltDIV_Fault)
           {
