@@ -6,8 +6,6 @@
 #include <math.h>
 #include <string.h>
 
-
-
 unsigned short pec15Table[256];
 unsigned short CRC15POLY = 0x4599;
 int ltc_state;
@@ -117,8 +115,12 @@ void BATSPIEnable_low(void)
      *          따라서 BATIC 은 CS Low 직전에 자기 설정을 매번 기입해야
      *          한다. 시험 위해 일시 제거했던 2줄을 원복한다.
      *--------------------------------------------------------------*/
-    SpiaRegs.SPICCR.bit.CLKPOLARITY = 1;        // TODO : [검증] 260910_Note1, 0.21 BATIC 극성 (Falling edge output)
-    SpiaRegs.SPIBRR                 = 60;       // TODO : [검증] 260910_Note1, 0.21 BATIC 속도 328kHz (NVRAM SPIBRR=50 오염 복구)
+    /*--------------------------------------------------------------
+     * 261019 : BATIC SPI 설정을 VER15 와 동일하게 되돌림
+     *          (CS Low 직전 극성·속도 재기록 제거, NVRAM 접근 후 SPIBRR=50 유지)
+     *--------------------------------------------------------------*/
+    //SpiaRegs.SPICCR.bit.CLKPOLARITY = 1;        // TODO : [검증] 260910_Note1, 0.21 BATIC 극성 (Falling edge output)
+    //SpiaRegs.SPIBRR                 = 60;       // TODO : [검증] 260910_Note1, 0.21 BATIC 속도 328kHz (NVRAM SPIBRR=50 오염 복구)
 
     GpioDataRegs.GPACLEAR.bit.GPIO10 = 1;
 //  delay_us(50);
@@ -725,11 +727,14 @@ void SalveTempsVoltHandler(SlaveReg *s)// Battery IC
      *          에러로 보였다. 리셋을 넣어 ltc_error_count 와 동일한
      *          "연속 실패 카운터" 로 동작시킨다.
      *--------------------------------------------------------------*/
+    /*--------------------------------------------------------------
+     * 261019 : 통신 성공 시 ErrorCount 리셋 3곳 제거 (VER15 동일)
+     *--------------------------------------------------------------*/
     s->Error= LTC6804_write_cmd(s->ID,LTC6804_CMD_ADAX |(1 << 8)|(0 << 4)|(0 << 0),0, 0);
     if(s->Error==1)
     {
         s->Error=0;
-        s->ErrorCount=0;                    // TODO : [검증] 260910_Note1, 0.21 통신 성공 시 리셋
+        //s->ErrorCount=0;                    // TODO : [검증] 260910_Note1, 0.21 통신 성공 시 리셋 (261019 VER15 동일 제거)
     }
     else
     {
@@ -739,7 +744,7 @@ void SalveTempsVoltHandler(SlaveReg *s)// Battery IC
     if(s->Error==1)
     {
         s->Error=0;
-        s->ErrorCount=0;                    // TODO : [검증] 260910_Note1, 0.21 통신 성공 시 리셋
+        //s->ErrorCount=0;                    // TODO : [검증] 260910_Note1, 0.21 통신 성공 시 리셋 (261019 VER15 동일 제거)
         //s->GPIO0ADC                         =((s->ADCV[1] << 8) & 0xff00) | (s->ADCV[0]  & 0x00ff);//GPIO1
         //s->CellTemperatureADC[1]            =((s->ADCV[3] << 8) & 0xff00) | (s->ADCV[2]  & 0x00ff);//GPIO2
         //s->CellTemperatureADC[2]            =((s->ADCV[5] << 8) & 0xff00) | (s->ADCV[4]  & 0x00ff);//GPIO3
@@ -752,7 +757,7 @@ void SalveTempsVoltHandler(SlaveReg *s)// Battery IC
     if(s->Error==1)
     {
         s->Error=0;
-        s->ErrorCount=0;                    // TODO : [검증] 260910_Note1, 0.21 통신 성공 시 리셋
+        //s->ErrorCount=0;                    // TODO : [검증] 260910_Note1, 0.21 통신 성공 시 리셋 (261019 VER15 동일 제거)
       //  s->CellTemperatureADC[3]             =((s->ADCV[1] << 8) & 0xff00) | (s->ADCV[0]  & 0x00ff);//GPIO4
         s->CellTemperatureADC[s->TempsChSelet] =((s->ADCV[3] << 8) & 0xff00) | (s->ADCV[2]  & 0x00ff);//GPIO5
         s->GPIORef                             =((s->ADCV[5] << 8) & 0xff00) | (s->ADCV[4]  & 0x00ff);//Ref

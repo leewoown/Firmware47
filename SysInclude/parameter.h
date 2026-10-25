@@ -322,7 +322,8 @@ Parameter
 //#define     Product_Version                    22   // (0.22 커밋 완료분: 64c69f3)
 //#define     Product_Version                    23   // TODO : [변경] 260910_Note1, 0.23 Product_Version 22->23 (NVRAM 지연초기화 + isoSPI 판정 보완 + 0x608 R14)
 //#define     Product_Version                    24   // TODO : [변경] 261001_Note1, 0.24 Product_Version 23->24 (셀 전압편차 판정 전류 게이트 56A)
-#define     Product_Version                      25   // TODO : [변경] 261016_Note1, 0.25 Product_Version 24->25 (셀 전압편차 판정 2000ms 대기 추가)
+//#define     Product_Version                    25   // TODO : [변경] 261016_Note1, 0.25 Product_Version 24->25 (셀 전압편차 판정 2000ms 대기 추가)
+#define     Product_Version                      26   // TODO : [변경] 261019_Note1, 0.26 Product_Version 25->26 (BATIC SPI 설정 VER15 동일화)
 /*--------------------------------------------------------------
  * 260831 : 디버깅보드 시험모드 해제 — 모사장치 CAN 대신 실기 isoSPI 사용.
  *          셀 전압/온도를 LTC6804 에서 직접 취득하며,
