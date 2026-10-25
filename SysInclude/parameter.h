@@ -243,8 +243,25 @@ Note: In this software, the default inverter is supposed to be DMC1500 board.
 #define SysRegTimer100msec   99
 #define SysRegTimer300msec   299
 #define SysRegTimer500msec   499
-#define SysRegTimer1000msec  1000
+/*--------------------------------------------------------------
+ * 261023 : 비교식이 > 라 0~1000 = 1001틱 주기(0x600 실측 1005.5ms) → 다른 항목과 같이 N-1
+ *--------------------------------------------------------------*/
+//#define SysRegTimer1000msec  1000
+#define SysRegTimer1000msec  999    // TODO : [검증] 261023_Note1, 0.27 1001틱→1000틱 (300/500msec 정의와 일관)
 #define CellVoltsampling100msec 100
+
+/* Timer0 PRD temperature correction (INTOSC drift, BATIC die temp as input) */
+/* PRD = C_TimerPrdBase x (1 + C_TimerPrdTempCoef x 1e-6 x (T - C_TimerPrdTempBase)) */
+//#define C_TimerPrdBase       80400.0   // TODO : [튜닝] 261023_Note1, 0.27 기준 PRD (기존 수동 보정값 유지)
+#define C_TimerPrdBase       80040.0   // TODO : [튜닝] 261023_Note1, 0.27 BATIC 16.1℃에서 틱=1.000ms 되는 PRD (실측 80400/1.0045)
+#define C_TimerPrdTempBase   16.1      // TODO : [튜닝] 261023_Note1, 0.27 PRD 기준 온도(℃, BATIC 다이)
+//#define C_TimerPrdTempCoef   0.0       // TODO : [튜닝] 261023_Note1, 0.27 온도계수 k ppm/℃(부호 포함), 미측정 → 0=온도보정 OFF(PRD 고정)
+//#define C_TimerPrdTempCoef   665.0     // TODO : [튜닝] 261023_Note1, 0.27 k=+665ppm/℃ (16.1℃ 10.045ms / 30℃ 9.953ms 2점 실측, 온도↑→주기↓)
+#define C_TimerPrdTempCoef   449.0     // TODO : [튜닝] 261023_Note1, 0.27 k=+449ppm/℃ (16.1℃ PRD80040 / 35.3℃ 정상상태 PRD81023→1.00368ms 역산 80726, 30℃ 점은 승온과도 추정 제외)
+#define C_TimerPrdTempMin    -20.0     /* valid BATIC temp range for correction */
+#define C_TimerPrdTempMax    100.0
+#define C_TimerPrdStep       40.0      /* apply only if PRD change >= 0.05% */
+#define C_TimerPrdLpfGain    0.1       /* 1st-order low-pass gain at 1s update */
 
 /*-------------------------------------------------------------------------------
  TMS320F28069 CLK SET UP 
@@ -323,7 +340,8 @@ Parameter
 //#define     Product_Version                    23   // TODO : [변경] 260910_Note1, 0.23 Product_Version 22->23 (NVRAM 지연초기화 + isoSPI 판정 보완 + 0x608 R14)
 //#define     Product_Version                    24   // TODO : [변경] 261001_Note1, 0.24 Product_Version 23->24 (셀 전압편차 판정 전류 게이트 56A)
 //#define     Product_Version                    25   // TODO : [변경] 261016_Note1, 0.25 Product_Version 24->25 (셀 전압편차 판정 2000ms 대기 추가)
-#define     Product_Version                      26   // TODO : [변경] 261019_Note1, 0.26 Product_Version 25->26 (BATIC SPI 설정 VER15 동일화)
+//#define     Product_Version                    26   // TODO : [변경] 261019_Note1, 0.26 Product_Version 25->26 (BATIC SPI 설정 VER15 동일화)
+#define     Product_Version                      27   // TODO : [변경] 261023_Note1, 0.27 Product_Version 26->27 (Timer0 PRD 온도보정 + CAN SJW 4TQ + 1000ms 999틱)
 /*--------------------------------------------------------------
  * 260831 : 디버깅보드 시험모드 해제 — 모사장치 CAN 대신 실기 isoSPI 사용.
  *          셀 전압/온도를 LTC6804 에서 직접 취득하며,

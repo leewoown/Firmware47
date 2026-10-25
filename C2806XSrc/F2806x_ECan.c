@@ -292,6 +292,7 @@ void InitECana(void)
            ECanaShadow.CANBTC.bit.BRPREG =  3;
            ECanaShadow.CANBTC.bit.TSEG2REG = 4;
            ECanaShadow.CANBTC.bit.TSEG1REG = 13;
+           ECanaShadow.CANBTC.bit.SJWREG = 3;   // TODO : [검증] 261023_Note1, 0.27 SJW 1→4TQ, INTOSC 드리프트(최대 +0.9%) 대비 재동기 허용폭 ±0.25%→±0.98%
            ECanaShadow.CANBTC.bit.SAM = 1;  //ByCHOO : SAM : Thripple Sampling. BRP > 4 일 경우만 가능하다고 하는데.. 그러면 BRPREG가 3보다 커야 하는 것 아닌가?
            #endif
 

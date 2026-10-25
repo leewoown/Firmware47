@@ -95,6 +95,7 @@ void SPI_BATWrite(unsigned int WRData);
 int LTC6804_read_cmd(char address, short command, char data[], int len);
 int LTC6804_write_cmd(char address, short command, char data[], int len);
 int LTC6804_DieTemperatureRead(int pack_id, float *temperature);
+void TimerPrdTempCompHandle(void);   // TODO : [검증] 261023_Note1, 0.27 Timer0 PRD 온도 보정
 void init_PEC15_Table(void);
 unsigned short pec15(char *data, int len);
 /*--------------------------------------------------------------
@@ -281,8 +282,13 @@ void main(void)
     //NVRAM_SelfTest();               // TODO : [검증] 260910_Note1, 0.22 BATIC 간섭으로 제거 (F-3 진단 전용, 기능 무관)
 
     ConfigCpuTimer(&CpuTimer0, 80, 1000);
+    /*--------------------------------------------------------------
+     * 261023 : 주석 90000은 90MHz 시절 잔재(80MHz 기준 80000=1ms). 초기 PRD를 상수로 옮기고
+     *          BATIC 온도 연동 보정(TimerPrdTempCompHandle)과 같은 기준값을 쓰도록 한다.
+     *--------------------------------------------------------------*/
     //CpuTimer0Regs.PRD.all = 80000;// 90000 is 1msec
-    CpuTimer0Regs.PRD.all = 80400;// 90000 is 1msec
+    //CpuTimer0Regs.PRD.all = 80400;// 90000 is 1msec
+    CpuTimer0Regs.PRD.all = (Uint32)C_TimerPrdBase;   // TODO : [검증] 261023_Note1, 0.27 80MHz: 80000=1ms, 기준 PRD 80040 (BATIC 16.1℃)
     //   ConfigCpuTimer(&CpuTimer1, 80, 1000000);
     //   ConfigCpuTimer(&CpuTimer2, 80, 1000000);
     CpuTimer0Regs.TCR.all = 0x4001; // Use write-only instruction to set TSS bit = 0
@@ -1043,6 +1049,35 @@ void main(void)
 
 }
 
+/*--------------------------------------------------------------
+ * 261023 : INTOSC 온도 드리프트로 1ms 틱(=CAN 송신 주기)이 BATIC 온도와 함께 변동
+ *          → BATIC 다이온도 연동으로 Timer0 PRD를 1초마다 보정 (임시 대책, 근본=외부 크리스털)
+ *          PRD = 80400 x (1 + k x (T - T_base)), k=C_TimerPrdTempCoef[ppm/℃]
+ *--------------------------------------------------------------*/
+float32 TimerPrdTempLpf = C_TimerPrdTempBase;   // TODO : [검증] 261023_Note1, 0.27 PRD 보정용 필터 온도 (0x60A 모니터링)
+void TimerPrdTempCompHandle(void)   // TODO : [검증] 261023_Note1, 0.27 Timer0 PRD 온도 보정
+{
+    //static float32 TempLpf = C_TimerPrdTempBase;   /* filtered BATIC die temp */
+    float32 Temp = SysRegs.Bat80VBATICTemperatureF;
+    float32 PrdNew;
+
+    /* 0.0 means read fail (LTC6804_DieTemperatureRead sets 0 on SPI error) */
+    if((Temp != 0.0) && (Temp > C_TimerPrdTempMin) && (Temp < C_TimerPrdTempMax))
+    {
+        TimerPrdTempLpf += (Temp - TimerPrdTempLpf) * C_TimerPrdLpfGain;   /* 1st-order low-pass */
+        PrdNew = C_TimerPrdBase * (1.0 + C_TimerPrdTempCoef * 1.0e-6 * (TimerPrdTempLpf - C_TimerPrdTempBase));
+    }
+    else
+    {
+        PrdNew = C_TimerPrdBase;   /* temp invalid: keep base PRD */
+    }
+
+    if(fabs(PrdNew - (float32)CpuTimer0Regs.PRD.all) >= C_TimerPrdStep)
+    {
+        CpuTimer0Regs.PRD.all = (Uint32)(PrdNew + 0.5);   /* takes effect at next timer reload */
+    }
+}
+
 interrupt void cpu_timer0_isr(void)
 {
    static Uint16 PrtctResetOld = 0;   // TODO : [검증] 260722_Note1, 0.13 PrtctReset edge 검출용 이전값
@@ -1626,7 +1661,16 @@ interrupt void cpu_timer0_isr(void)
                     //{
                     //    CANARegs.CellTempsTxNum =0;
                     //}
-                    CANATX(0x60A,8,0x0000,0x0000,0x0000,0x0000);   // TODO : [검증] 260901_Note1, 0.17 R13 0x60A Debugging1 예약(0)
+                    /*--------------------------------------------------------------
+                     * 261023 : Debugging1(0) → Timer0 PRD 온도보정 모니터링
+                     *          D0-1 PRD low, D2-3 PRD high, D4-5 필터온도(0.1℃), D6-7 BATIC 원시온도(0.1℃)
+                     *--------------------------------------------------------------*/
+                    //CANATX(0x60A,8,0x0000,0x0000,0x0000,0x0000);   // TODO : [검증] 260901_Note1, 0.17 R13 0x60A Debugging1 예약(0)
+                    CANATX(0x60A,8,
+                           (unsigned int)(CpuTimer0Regs.PRD.all & 0xFFFF),
+                           (unsigned int)(CpuTimer0Regs.PRD.all >> 16),
+                           (unsigned int)(int16)(TimerPrdTempLpf * 10),
+                           (unsigned int)(int16)(SysRegs.Bat80VBATICTemperatureF * 10));   // TODO : [검증] 261023_Note1, 0.27 PRD 보정 모니터링
                 }
        break;
        case 55 :
@@ -1721,6 +1765,11 @@ interrupt void cpu_timer0_isr(void)
                }
 
        break;
+#if DebugBoardMode == 0
+       case 500:
+               TimerPrdTempCompHandle();   // TODO : [검증] 261023_Note1, 0.27 BATIC 온도 연동 PRD 보정 (디버그보드는 BATIC 온도=0이라 제외)
+       break;
+#endif
        default :
        break;
    }
