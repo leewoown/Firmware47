@@ -207,6 +207,7 @@ struct SystemState_BIT
     unsigned int     INITOK              :1; // 13
     unsigned int     BalanceStatStop     :1; // 14
     unsigned int     CANCOMEnable        :1; // 15
+    unsigned int     ClkSrcFb            :1; // 16   // TODO : [검증] 261026_Note1, 0.28 클럭 폴백 0=XTAL 정상 1=INTOSC1 폴백 (0x602 미송신, 보고 비트는 규약 협의 후)
 };
 union SystemState_REG
 {

@@ -98,8 +98,13 @@ void InitSysCtrl(void)
     // Select Internal Oscillator 1 as Clock Source (default), and turn off all
     // unused clocks to conserve power.
     //
-    IntOsc1Sel();
-    //XtalOscSel();
+    /*--------------------------------------------------------------
+     * 261026 : 클럭 소스 INTOSC1(10MHz) -> 외부 크리스털 X1/X2 20MHz 전환.
+     *          INTOSC 온도 드리프트로 인한 CAN 송신 주기 변동·Error Frame 근본 해소.
+     *          PLL 배수는 F2806x_Examples.h DSP28_PLLCR 16 -> 8 (80MHz 유지).
+     *--------------------------------------------------------------*/
+    //IntOsc1Sel();   // TODO : [변경] 261026_Note1, 0.28 INTOSC1 -> XTAL
+    XtalOscSel();     // TODO : [검증] 261026_Note1, 0.28 외부 크리스털 20MHz 사용 (INTOSC1 은 와치독·폴백용으로 유지)
     //
     // Initialize the PLL control: PLLCR and CLKINDIV
     // DSP28_PLLCR and DSP28_CLKINDIV are defined in F2806x_Examples.h
@@ -557,11 +562,16 @@ void XtalOscSel(void)
 {
     EALLOW;
     SysCtrlRegs.CLKCTL.bit.XTALOSCOFF = 0;     // Turn on XTALOSC
-    
+
+    /*--------------------------------------------------------------
+     * 261026 : XTAL 기동 대기. DELAY_US 는 80MHz(CPU_RATE) 기준이지만 이 시점은
+     *          PLL 미적용(INTOSC1 10MHz / 4 = 2.5MHz)이라 실제 지연은 32배인 약 32ms.
+     *          데이터시트 tOSCST 최대 10ms 를 3배 여유로 충족하므로 값은 유지한다.
+     *--------------------------------------------------------------*/
     //
     // Wait for 1ms while XTAL starts up
     //
-    DELAY_US(1000);
+    DELAY_US(1000);   // TODO : [검증] 261026_Note1, 0.28 실제 약 32ms (2.5MHz 동작 중), 20ms 로 늘리지 말 것(실제 640ms)
     
     SysCtrlRegs.CLKCTL.bit.XCLKINOFF = 1;      // Turn off XCLKIN
     SysCtrlRegs.CLKCTL.bit.OSCCLKSRC2SEL = 0;  // Switch to external clock

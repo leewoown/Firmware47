@@ -62,7 +62,11 @@ extern "C" {
 
 //#define DSP28_PLLCR     18
 //#define DSP28_PLLCR   17
-#define DSP28_PLLCR   16
+/*--------------------------------------------------------------
+ * 261026 : 클럭 소스 INTOSC1(10MHz) -> 외부 크리스털 20MHz 전환에 따라 PLL 배수 16 -> 8
+ *--------------------------------------------------------------*/
+//#define DSP28_PLLCR   16   // (구) INTOSC1 10MHz x 16 / 2 = 80MHz
+#define DSP28_PLLCR    8     // TODO : [검증] 261026_Note1, 0.28 XTAL 20MHz x 8 / 2 = 80MHz
 //#define DSP28_PLLCR   15
 //#define DSP28_PLLCR   14
 //#define DSP28_PLLCR   13

@@ -179,7 +179,26 @@ void main(void)
 {
 //    struct ECAN_REGS ECanaShadow;
     float32 SocSetF;                   // TODO : [검증] 260902_Note1, 0.21 CAN 수동 SOC 설정값[%] 임시
+    /*--------------------------------------------------------------
+     * 261026 : ramfuncs 복사를 InitSysCtrl() 앞으로 이동. XtalOscSel() 이 부르는
+     *          DELAY_US(DSP28x_usDelay) 는 ramfuncs 에 있어, 복사 전에 부르면
+     *          빈 RAM 으로 점프해 부팅 실패한다 (260902 R-1 과 동일 원인, SysCtrl.c 59행 TI 주의문).
+     *--------------------------------------------------------------*/
+    MemCopy(&RamfuncsLoadStart, &RamfuncsLoadEnd, &RamfuncsRunStart);   // TODO : [검증] 261026_Note1, 0.28 XtalOscSel 의 DELAY_US 보다 먼저 복사
     InitSysCtrl();
+    /*--------------------------------------------------------------
+     * 261026 : XTAL 미발진 폴백. TRM 1.3.2.3.1 — XTAL 선택 중 클럭 상실 시 MCD 가
+     *          INTOSC1 로 자동 전환(OSCCLKSRCSEL=0 강제)하고 PLLCR=0 으로 만든다.
+     *          InitSysCtrl() 의 InitPll() 이 MCLKSTS 를 지우고 PLLCR=8 을 다시 쓰므로
+     *          이 시점은 INTOSC1 x 8 / 2 = 40MHz 상태. MCLKSTS 대신 OSCCLKSRCSEL 로
+     *          판정하고 PLLCR=16 으로 재설정해 80MHz 로 복귀한다.
+     *--------------------------------------------------------------*/
+    SysRegs.BAT80VStateReg.bit.ClkSrcFb = (SysCtrlRegs.CLKCTL.bit.OSCCLKSRCSEL == 0) ? 1 : 0;   // TODO : [검증] 261026_Note1, 0.28 MCD 가 INTOSC1 로 되돌린 경우 = XTAL 미발진
+    if(SysRegs.BAT80VStateReg.bit.ClkSrcFb == 1)
+    {
+        IntOsc1Sel();                              /* turn off dead XTALOSC, keep INTOSC1 */
+        InitPll(16, DSP28_DIVSEL);                 /* 10MHz x 16 / 2 = 80MHz */
+    }
     /*
      * To check the clock status of the C2000 in operation
      */
@@ -211,8 +230,17 @@ void main(void)
 //    PieVectTable.TINT2 = &cpu_timer2_isr;
     EDIS;    // This is needed to disable write to EALLOW protected registers
     InitGpio();
-    GpioCtrlRegs.GPAMUX2.bit.GPIO18 = 3; //enable XCLOCKOUT through GPIO mux
-    SysCtrlRegs.XCLK.bit.XCLKOUTDIV = 2; //XCLOCKOUT = SYSCLK
+    /*--------------------------------------------------------------
+     * 261026 : XCLKOUT(GPIO18, 모듈 커넥터 PIN39) 분주 설정. XCLK 는 EALLOW 보호
+     *          레지스터라 EDIS 뒤의 기존 쓰기는 무시되어 기본값 /4(20MHz)로 동작했다.
+     *          클럭 검증용으로 /4 를 명시한다 (XTAL 정상 시 20.000MHz 고정).
+     *--------------------------------------------------------------*/
+    //GpioCtrlRegs.GPAMUX2.bit.GPIO18 = 3; //enable XCLOCKOUT through GPIO mux
+    //SysCtrlRegs.XCLK.bit.XCLKOUTDIV = 2; //XCLOCKOUT = SYSCLK
+    EALLOW;
+    GpioCtrlRegs.GPAMUX2.bit.GPIO18 = 3;      // TODO : [검증] 261026_Note1, 0.28 GPIO18 = XCLKOUT (InitGpio 와 동일 설정, 명시)
+    SysCtrlRegs.XCLK.bit.XCLKOUTDIV = 0;      // TODO : [검증] 261026_Note1, 0.28 XCLKOUT = SYSCLK/4 = 20MHz (0:/4 1:/2 2:/1 3:OFF)
+    EDIS;
     InitSpiGpio();
     InitSpi();
     /*--------------------------------------------------------------
@@ -251,7 +279,7 @@ void main(void)
     InitECanGpio();
     InitECan();
 
-    MemCopy(&RamfuncsLoadStart, &RamfuncsLoadEnd, &RamfuncsRunStart);
+    //MemCopy(&RamfuncsLoadStart, &RamfuncsLoadEnd, &RamfuncsRunStart);   // TODO : [검증] 261026_Note1, 0.28 InitSysCtrl() 앞으로 이동
     InitFlash();
 
     /*--------------------------------------------------------------
@@ -288,7 +316,8 @@ void main(void)
      *--------------------------------------------------------------*/
     //CpuTimer0Regs.PRD.all = 80000;// 90000 is 1msec
     //CpuTimer0Regs.PRD.all = 80400;// 90000 is 1msec
-    CpuTimer0Regs.PRD.all = (Uint32)C_TimerPrdBase;   // TODO : [검증] 261023_Note1, 0.27 80MHz: 80000=1ms, 기준 PRD 80040 (BATIC 16.1℃)
+    //CpuTimer0Regs.PRD.all = (Uint32)C_TimerPrdBase;   // TODO : [검증] 261023_Note1, 0.27 80MHz: 80000=1ms, 기준 PRD 80040 (BATIC 16.1℃)
+    CpuTimer0Regs.PRD.all = (SysRegs.BAT80VStateReg.bit.ClkSrcFb == 0) ? (Uint32)C_TimerPrdXtal : (Uint32)C_TimerPrdBase;   // TODO : [검증] 261026_Note1, 0.28 XTAL 은 80000 고정, INTOSC1 폴백 시 0.27 기준값
     //   ConfigCpuTimer(&CpuTimer1, 80, 1000000);
     //   ConfigCpuTimer(&CpuTimer2, 80, 1000000);
     CpuTimer0Regs.TCR.all = 0x4001; // Use write-only instruction to set TSS bit = 0
@@ -329,6 +358,7 @@ void main(void)
 
                  SysTimerINIT(&SysRegs);
                  SysVarINIT(&SysRegs);
+                 SysRegs.BAT80VStateReg.bit.ClkSrcFb = (SysCtrlRegs.CLKCTL.bit.OSCCLKSRCSEL == 0) ? 1 : 0;   // TODO : [검증] 261026_Note1, 0.28 SysVarINIT 가 .all=0 으로 지우므로 하드웨어에서 재취득
                  CANRegVarINIT(&CANARegs);
                  CalSocRegsInit(&Farasis56AhSocRegs);
                  ProtectRelayVarINIT(&PrtectRelayRegs);
@@ -1668,7 +1698,8 @@ interrupt void cpu_timer0_isr(void)
                     //CANATX(0x60A,8,0x0000,0x0000,0x0000,0x0000);   // TODO : [검증] 260901_Note1, 0.17 R13 0x60A Debugging1 예약(0)
                     CANATX(0x60A,8,
                            (unsigned int)(CpuTimer0Regs.PRD.all & 0xFFFF),
-                           (unsigned int)(CpuTimer0Regs.PRD.all >> 16),
+                           //(unsigned int)(CpuTimer0Regs.PRD.all >> 16),
+                           (unsigned int)((SysRegs.BAT80VStateReg.bit.ClkSrcFb << 8) | (CpuTimer0Regs.PRD.all >> 16)),   // TODO : [검증] 261026_Note1, 0.28 D2=PRD 상위(항상 1), D3=ClkSrcFb
                            (unsigned int)(int16)(TimerPrdTempLpf * 10),
                            (unsigned int)(int16)(SysRegs.Bat80VBATICTemperatureF * 10));   // TODO : [검증] 261023_Note1, 0.27 PRD 보정 모니터링
                 }
@@ -1767,7 +1798,8 @@ interrupt void cpu_timer0_isr(void)
        break;
 #if DebugBoardMode == 0
        case 500:
-               TimerPrdTempCompHandle();   // TODO : [검증] 261023_Note1, 0.27 BATIC 온도 연동 PRD 보정 (디버그보드는 BATIC 온도=0이라 제외)
+               //TimerPrdTempCompHandle();   // TODO : [검증] 261023_Note1, 0.27 BATIC 온도 연동 PRD 보정 (디버그보드는 BATIC 온도=0이라 제외)
+               if(SysRegs.BAT80VStateReg.bit.ClkSrcFb == 1) { TimerPrdTempCompHandle(); }   // TODO : [검증] 261026_Note1, 0.28 INTOSC1 폴백 시에만 온도 보정, XTAL 은 PRD 고정
        break;
 #endif
        default :
@@ -1780,7 +1812,7 @@ interrupt void cpu_timer0_isr(void)
    DigitalOutput(&SysRegs);
 
    //
-    //InitECan();
+    InitECan();   // TODO : [검증] 261026_Note1, 0.28 1ms ISR 말미 CAN 재초기화 활성 (사용자 결정, 사유 기재 필요)
    // Acknowledge this interrupt to receive more interrupts from group 1
 
    if(SysRegs.MainIsr1>3000) {SysRegs.MainIsr1=0;}
